@@ -13,49 +13,54 @@
 
 /*#define DEBUG*/
 
-char *input_filename;
-int line_number;
-
-char *output_filename;
-FILE *output;
-
-char *listing_filename;
-FILE *listing;
-
-int assembler_step;
-int default_start_address;
-int start_address;
-int address;
-int first_time;
-
-int instruction_addressing;
-int instruction_offset;
-int instruction_offset_width;
-
-int instruction_register;
-
-int instruction_value;
-int instruction_value2;
-
 #define MAX_SIZE        256
 
-char line[MAX_SIZE];
-char part[MAX_SIZE];
-char name[MAX_SIZE];
-char expr_name[MAX_SIZE];
-char undefined_name[MAX_SIZE];
-char global_label[MAX_SIZE];
-char *prev_p;
-char *p;
+/* struct hold global vars to avoid shadow with func local vars see: -Wshadow */
+struct _tinyasm_s {
+    char    *input_filename;
+    char    *output_filename;
+    char    *listing_filename;
 
-char *g;
-char generated[8];
+    int     line_number;
+    FILE    *output;
+    FILE    *listing;
 
-int errors;
-int warnings;
-int bytes;
-int change;
-int change_number;
+    char    line[MAX_SIZE];
+    char    part[MAX_SIZE];
+    char    name[MAX_SIZE];
+    char    expr_name[MAX_SIZE];
+    char    undefined_name[MAX_SIZE];
+
+    char    global_label[MAX_SIZE];
+    char    *prev_p;
+
+    char    *p;
+    char    *g;
+    char    generated[8];
+
+    int     assembler_step;
+    int     default_start_address;
+    int     start_address;
+    int     address;
+    int     first_time;
+
+    int     errors;
+    int     warnings;
+    int     bytes;
+    int     change;
+    int     change_number;
+
+    int     instruction_addressing;
+    int     instruction_offset;
+    int     instruction_offset_width;
+
+    int     instruction_register;
+
+    int     instruction_value;
+    int     instruction_value2;
+};
+typedef struct _tinyasm_s tinyasm_t;
+tinyasm_t   tAsm;
 
 struct label {
     struct label *left;
@@ -92,7 +97,7 @@ char *reg1[16] = {
 /* function prototypes */
 
 void message(int error, char *message);
-char *match_addressing	     (char *p, int width);
+char *match_addressing       (char *p, int width);
 char *match_register         (char *p, int width, int *value);
 char *match_expression       (char *p, int *value);
 char *match_expression_level1(char *p, int *value);
@@ -102,26 +107,26 @@ char *match_expression_level4(char *p, int *value);
 char *match_expression_level5(char *p, int *value);
 char *match_expression_level6(char *p, int *value);
 
-struct label	*define_label(char *name, int value);
-struct label	*find_label(char *name);
-void	sort_labels(struct label *node);
-char	*avoid_spaces(char *p);
-int	islabel(int c);
-char	*read_character(char *p, int *c);
-void	emit_byte(int byte);
-char	*match(char *p, char *pattern, char *decode);
-void	to_lowercase(char *p);
-void	separate(void);
-void	check_end(char *p);
-void	process_instruction(void);
-void	reset_address(void);
-void	incbin(char *fname);
-void	do_assembly(char *fname);
+struct label    *define_label(char *name, int value);
+struct label    *find_label(char *name);
+void    sort_labels(struct label *node);
+char    *avoid_spaces(char *p);
+int     islabel(int c);
+char    *read_character(char *p, int *c);
+void    emit_byte(int byte);
+char    *match(char *p, char *pattern, char *decode);
+void    to_lowercase(char *p);
+void    separate(void);
+void    check_end(char *p);
+void    process_instruction(void);
+void    reset_address(void);
+void    incbin(char *fname);
+void    do_assembly(char *fname);
 
 
 #ifdef __DESMET__
 /* Work around bug in DeSmet 3.1N runtime: closeall() overflows buffer and clobbers exit status */
-#define exit(status)	_exit(status)
+#define exit(status)    _exit(status)
 #endif
 
 /*
@@ -132,7 +137,7 @@ struct label *define_label(char *name, int value)
     struct label *label;
     struct label *explore;
     int c;
-    
+
     /* Allocate label */
     label = malloc(sizeof(struct label) + strlen(name));
     if (label == NULL) {
@@ -140,13 +145,13 @@ struct label *define_label(char *name, int value)
         exit(1);
         return NULL;
     }
-    
+
     /* Fill label */
     label->left = NULL;
     label->right = NULL;
     label->value = value;
     strcpy(label->name, name);
-    
+
     /* Populate binary tree */
     if (label_list == NULL) {
         label_list = label;
@@ -179,7 +184,7 @@ struct label *find_label(char *name)
 {
     struct label *explore;
     int c;
-    
+
     /* Follows a binary tree */
     explore = label_list;
     while (explore != NULL) {
@@ -201,7 +206,7 @@ void sort_labels(struct label *node)
 {
     if (node->left != NULL)
         sort_labels(node->left);
-    fprintf(listing, "%-20s %04x\n", node->name, node->value);
+    fprintf(tAsm.listing, "%-20s %04x\n", node->name, node->value);
     if (node->right != NULL)
         sort_labels(node->right);
 }
@@ -225,11 +230,11 @@ char *match_addressing(char *p, int width)
     int reg2;
     char *p2;
     int *bits;
-    
-    bits = &instruction_addressing;
-    instruction_offset = 0;
-    instruction_offset_width = 0;
-    
+
+    bits = &tAsm.instruction_addressing;
+    tAsm.instruction_offset = 0;
+    tAsm.instruction_offset_width = 0;
+
     p = avoid_spaces(p);
     if (*p == '[') {
         p = avoid_spaces(p + 1);
@@ -242,8 +247,8 @@ char *match_addressing(char *p, int width)
                     *bits = 0x07;
                 } else if (reg == 5) {  /* BP */
                     *bits = 0x46;
-                    instruction_offset = 0;
-                    instruction_offset_width = 1;
+                    tAsm.instruction_offset = 0;
+                    tAsm.instruction_offset_width = 1;
                 } else if (reg == 6) {  /* SI */
                     *bits = 0x04;
                 } else if (reg == 7) {  /* DI */
@@ -274,18 +279,18 @@ char *match_addressing(char *p, int width)
                     if (*p == ']') {
                         p++;
                     } else if (*p == '+' || *p == '-') {
-                        p2 = match_expression(p, &instruction_offset);
+                        p2 = match_expression(p, &tAsm.instruction_offset);
                         if (p2 == NULL)
                             return NULL;
                         p = avoid_spaces(p2);
                         if (*p != ']')
                             return NULL;
                         p++;
-                        if (instruction_offset >= -0x80 && instruction_offset <= 0x7f) {
-                            instruction_offset_width = 1;
+                        if (tAsm.instruction_offset >= -0x80 && tAsm.instruction_offset <= 0x7f) {
+                            tAsm.instruction_offset_width = 1;
                             *bits |= 0x40;
                         } else {
-                            instruction_offset_width = 2;
+                            tAsm.instruction_offset_width = 2;
                             *bits |= 0x80;
                         }
                     } else {    /* Syntax error */
@@ -303,18 +308,18 @@ char *match_addressing(char *p, int width)
                     } else {    /* Not valid */
                         return NULL;
                     }
-                    p2 = match_expression(p, &instruction_offset);
+                    p2 = match_expression(p, &tAsm.instruction_offset);
                     if (p2 == NULL)
                         return NULL;
                     p = avoid_spaces(p2);
                     if (*p != ']')
                         return NULL;
                     p++;
-                    if (instruction_offset >= -0x80 && instruction_offset <= 0x7f) {
-                        instruction_offset_width = 1;
+                    if (tAsm.instruction_offset >= -0x80 && tAsm.instruction_offset <= 0x7f) {
+                        tAsm.instruction_offset_width = 1;
                         *bits |= 0x40;
                     } else {
-                        instruction_offset_width = 2;
+                        tAsm.instruction_offset_width = 2;
                         *bits |= 0x80;
                     }
                 }
@@ -322,7 +327,7 @@ char *match_addressing(char *p, int width)
                 return NULL;
             }
         } else {    /* No valid register, try expression (absolute addressing) */
-            p2 = match_expression(p, &instruction_offset);
+            p2 = match_expression(p, &tAsm.instruction_offset);
             if (p2 == NULL)
                 return NULL;
             p = avoid_spaces(p2);
@@ -330,7 +335,7 @@ char *match_addressing(char *p, int width)
                 return NULL;
             p++;
             *bits = 0x06;
-            instruction_offset_width = 2;
+            tAsm.instruction_offset_width = 2;
         }
     } else {    /* Register */
         p = match_register(p, width, &reg);
@@ -356,7 +361,7 @@ char *match_register(char *p, int width, int *value)
 {
     char reg[3];
     int c;
-    
+
     p = avoid_spaces(p);
     if (!isalpha(p[0]) || !isalpha(p[1]) || islabel(p[2]))
         return NULL;
@@ -448,7 +453,7 @@ char *read_character(char *p, int *c)
 char *match_expression(char *p, int *value)
 {
     int value1;
-    
+
     p = match_expression_level1(p, value);
     if (p == NULL)
         return NULL;
@@ -473,7 +478,7 @@ char *match_expression(char *p, int *value)
 char *match_expression_level1(char *p, int *value)
 {
     int value1;
-    
+
     p = match_expression_level2(p, value);
     if (p == NULL)
         return NULL;
@@ -498,7 +503,7 @@ char *match_expression_level1(char *p, int *value)
 char *match_expression_level2(char *p, int *value)
 {
     int value1;
-    
+
     p = match_expression_level3(p, value);
     if (p == NULL)
         return NULL;
@@ -523,7 +528,7 @@ char *match_expression_level2(char *p, int *value)
 char *match_expression_level3(char *p, int *value)
 {
     int value1;
-    
+
     p = match_expression_level4(p, value);
     if (p == NULL)
         return NULL;
@@ -555,7 +560,7 @@ char *match_expression_level3(char *p, int *value)
 char *match_expression_level4(char *p, int *value)
 {
     int value1;
-    
+
     p = match_expression_level5(p, value);
     if (p == NULL)
         return NULL;
@@ -587,7 +592,7 @@ char *match_expression_level4(char *p, int *value)
 char *match_expression_level5(char *p, int *value)
 {
     int value1;
-    
+
     p = match_expression_level6(p, value);
     if (p == NULL)
         return NULL;
@@ -607,7 +612,7 @@ char *match_expression_level5(char *p, int *value)
             if (p == NULL)
                 return NULL;
             if (*value == 0) {
-                if (assembler_step == 2)
+                if (tAsm.assembler_step == 2)
                     message(1, "division by zero");
                 *value = 1;
             }
@@ -619,7 +624,7 @@ char *match_expression_level5(char *p, int *value)
             if (p == NULL)
                 return NULL;
             if (*value == 0) {
-                if (assembler_step == 2)
+                if (tAsm.assembler_step == 2)
                     message(1, "modulo by zero");
                 *value = 1;
             }
@@ -639,7 +644,7 @@ char *match_expression_level6(char *p, int *value)
     int c;
     char *p2;
     struct label *label;
-    
+
     p = avoid_spaces(p);
     if (*p == '(') {    /* Handle parenthesized expressions */
         p++;
@@ -681,7 +686,7 @@ char *match_expression_level6(char *p, int *value)
         *value = number;
         return p;
     }
-    if (p[0] == '0' && tolower(p[1]) == 'x' && isxdigit(p[2])) {	/* Hexadecimal */
+    if (p[0] == '0' && tolower(p[1]) == 'x' && isxdigit(p[2])) {    /* Hexadecimal */
         p += 2;
         number = 0;
         while (isxdigit(p[0])) {
@@ -695,7 +700,7 @@ char *match_expression_level6(char *p, int *value)
         *value = number;
         return p;
     }
-    if (p[0] == '$' && isdigit(p[1])) {	/* Hexadecimal */
+    if (p[0] == '$' && isdigit(p[1])) {    /* Hexadecimal */
         /* This is nasm syntax, notice no letter is allowed after $ */
         /* So it's preferrable to use prefix 0x for hexadecimal */
         p += 1;
@@ -733,34 +738,34 @@ char *match_expression_level6(char *p, int *value)
     }
     if (*p == '$' && p[1] == '$') { /* Start address */
         p += 2;
-        *value = start_address;
+        *value = tAsm.start_address;
         return p;
     }
     if (*p == '$') { /* Current address */
         p++;
-        *value = address;
+        *value = tAsm.address;
         return p;
     }
     if (isalpha(*p) || *p == '_' || *p == '.') { /* Label */
         if (*p == '.') {
-            strcpy(expr_name, global_label);
-            p2 = expr_name;
+            strcpy(tAsm.expr_name, tAsm.global_label);
+            p2 = tAsm.expr_name;
             while (*p2)
                 p2++;
         } else {
-            p2 = expr_name;
+            p2 = tAsm.expr_name;
         }
         while (isalpha(*p) || isdigit(*p) || *p == '_' || *p == '.')
             *p2++ = *p++;
         *p2 = '\0';
         for (c = 0; c < 16; c++)
-            if (strcmp(expr_name, reg1[c]) == 0)
+            if (strcmp(tAsm.expr_name, reg1[c]) == 0)
                 return NULL;
-        label = find_label(expr_name);
+        label = find_label(tAsm.expr_name);
         if (label == NULL) {
             *value = 0;
             undefined++;
-            strcpy(undefined_name, expr_name);
+            strcpy(tAsm.undefined_name, tAsm.expr_name);
         } else {
             *value = label->value;
         }
@@ -775,16 +780,16 @@ char *match_expression_level6(char *p, int *value)
 void emit_byte(int byte)
 {
     char buf[1];
-    
-    if (assembler_step == 2) {
-        if (g != NULL && g < generated + sizeof(generated))
-            *g++ = byte;
+
+    if (tAsm.assembler_step == 2) {
+        if (tAsm.g != NULL && tAsm.g < tAsm.generated + sizeof(tAsm.generated))
+            *tAsm.g++ = byte;
         buf[0] = byte;
         /* Cannot use fputc because DeSmet C expands to CR LF */
-        fwrite(buf, 1, 1, output);
-        bytes++;
+        fwrite(buf, 1, 1, tAsm.output);
+        tAsm.bytes++;
     }
-    address++;
+    tAsm.address++;
 }
 
 /*
@@ -798,11 +803,11 @@ char *match(char *p, char *pattern, char *decode)
     int bit;
     int qualifier;
     char *base;
-    
+
     undefined = 0;
     while (*pattern) {
 /*        fputc(*pattern, stdout);*/
-        if (*pattern == '%') {	/* Special */
+        if (*pattern == '%') {    /* Special */
             pattern++;
             if (*pattern == 'd') {  /* Addressing */
                 pattern++;
@@ -851,13 +856,13 @@ char *match(char *p, char *pattern, char *decode)
                 pattern++;
                 if (*pattern == '8') {
                     pattern++;
-                    p2 = match_register(p, 8, &instruction_register);
+                    p2 = match_register(p, 8, &tAsm.instruction_register);
                     if (p2 == NULL)
                         return NULL;
                     p = p2;
                 } else if (*pattern == '1' && pattern[1] == '6') {
                     pattern += 2;
-                    p2 = match_register(p, 16, &instruction_register);
+                    p2 = match_register(p, 16, &tAsm.instruction_register);
                     if (p2 == NULL)
                         return NULL;
                     p = p2;
@@ -868,13 +873,13 @@ char *match(char *p, char *pattern, char *decode)
                 pattern++;
                 if (*pattern == '8') {
                     pattern++;
-                    p2 = match_expression(p, &instruction_value);
+                    p2 = match_expression(p, &tAsm.instruction_value);
                     if (p2 == NULL)
                         return NULL;
                     p = p2;
                 } else if (*pattern == '1' && pattern[1] == '6') {
                     pattern += 2;
-                    p2 = match_expression(p, &instruction_value);
+                    p2 = match_expression(p, &tAsm.instruction_value);
                     if (p2 == NULL)
                         return NULL;
                     p = p2;
@@ -891,11 +896,11 @@ char *match(char *p, char *pattern, char *decode)
                         p += 5;
                         qualifier = 1;
                     }
-                    p2 = match_expression(p, &instruction_value);
+                    p2 = match_expression(p, &tAsm.instruction_value);
                     if (p2 == NULL)
                         return NULL;
                     if (qualifier == 0) {
-                        c = instruction_value - (address + 2);
+                        c = tAsm.instruction_value - (tAsm.address + 2);
                         if (undefined == 0 && (c < -128 || c > 127) && memcmp(decode, "xeb", 3) == 0)
                             return NULL;
                     }
@@ -906,7 +911,7 @@ char *match(char *p, char *pattern, char *decode)
                     if (memcmp(p, "SHORT", 5) == 0 && isspace(p[5]))
                         p2 = NULL;
                     else
-                        p2 = match_expression(p, &instruction_value);
+                        p2 = match_expression(p, &tAsm.instruction_value);
                     if (p2 == NULL)
                         return NULL;
                     p = p2;
@@ -923,11 +928,11 @@ char *match(char *p, char *pattern, char *decode)
                         p += 4;
                         qualifier = 1;
                     }
-                    p2 = match_expression(p, &instruction_value);
+                    p2 = match_expression(p, &tAsm.instruction_value);
                     if (p2 == NULL)
                         return NULL;
                     if (qualifier == 0) {
-                        c = instruction_value;
+                        c = tAsm.instruction_value;
                         if (undefined != 0)
                             return NULL;
                         if (undefined == 0 && (c < -128 || c > 127))
@@ -941,13 +946,13 @@ char *match(char *p, char *pattern, char *decode)
                 pattern++;
                 if (*pattern == '3' && pattern[1] == '2') {
                     pattern += 2;
-                    p2 = match_expression(p, &instruction_value2);
+                    p2 = match_expression(p, &tAsm.instruction_value2);
                     if (p2 == NULL)
                         return NULL;
                     if (*p2 != ':')
                         return NULL;
                     p = p2 + 1;
-                    p2 = match_expression(p, &instruction_value);
+                    p2 = match_expression(p, &tAsm.instruction_value);
                     if (p2 == NULL)
                         return NULL;
                     p = p2;
@@ -1007,7 +1012,7 @@ char *match(char *p, char *pattern, char *decode)
                             decode++;
                         else if (decode[0] == '1' && decode[1] == '6')
                             decode += 2;
-                        c |= instruction_register << (5 - bit);
+                        c |= tAsm.instruction_register << (5 - bit);
                         bit += 3;
                     } else if (decode[0] == 'd') {  /* Addressing field */
                         if (decode[1] == '8')
@@ -1015,47 +1020,47 @@ char *match(char *p, char *pattern, char *decode)
                         else
                             decode += 3;
                         if (bit == 0) {
-                            c |= instruction_addressing & 0xc0;
+                            c |= tAsm.instruction_addressing & 0xc0;
                             bit += 2;
                         } else {
-                            c |= instruction_addressing & 0x07;
+                            c |= tAsm.instruction_addressing & 0x07;
                             bit += 3;
                             d = 1;
                         }
                     } else if (decode[0] == 'i' || decode[0] == 's') {
                         if (decode[1] == '8') {
                             decode += 2;
-                            c = instruction_value;
+                            c = tAsm.instruction_value;
                             break;
                         } else {
                             decode += 3;
-                            c = instruction_value;
-                            instruction_offset = instruction_value >> 8;
-                            instruction_offset_width = 1;
+                            c = tAsm.instruction_value;
+                            tAsm.instruction_offset = tAsm.instruction_value >> 8;
+                            tAsm.instruction_offset_width = 1;
                             d = 1;
                             break;
                         }
                     } else if (decode[0] == 'a') {
                         if (decode[1] == '8') {
                             decode += 2;
-                            c = instruction_value - (address + 1);
-                            if (assembler_step == 2 && (c < -128 || c > 127))
+                            c = tAsm.instruction_value - (tAsm.address + 1);
+                            if (tAsm.assembler_step == 2 && (c < -128 || c > 127))
                                 message(1, "short jump too long");
                             break;
                         } else {
                             decode += 3;
-                            c = instruction_value - (address + 2);
-                            instruction_offset = c >> 8;
-                            instruction_offset_width = 1;
+                            c = tAsm.instruction_value - (tAsm.address + 2);
+                            tAsm.instruction_offset = c >> 8;
+                            tAsm.instruction_offset_width = 1;
                             d = 1;
                             break;
                         }
                     } else if (decode[0] == 'f') {
                         decode += 3;
-                        emit_byte(instruction_value);
-                        c = instruction_value >> 8;
-                        instruction_offset = instruction_value2;
-                        instruction_offset_width = 2;
+                        emit_byte(tAsm.instruction_value);
+                        c = tAsm.instruction_value >> 8;
+                        tAsm.instruction_offset = tAsm.instruction_value2;
+                        tAsm.instruction_offset_width = 2;
                         d = 1;
                         break;
                     } else {
@@ -1069,18 +1074,18 @@ char *match(char *p, char *pattern, char *decode)
             emit_byte(c);
             if (d == 1) {
                 d = 0;
-                if (instruction_offset_width >= 1) {
-                    emit_byte(instruction_offset);
+                if (tAsm.instruction_offset_width >= 1) {
+                    emit_byte(tAsm.instruction_offset);
                 }
-                if (instruction_offset_width >= 2) {
-                    emit_byte(instruction_offset >> 8);
+                if (tAsm.instruction_offset_width >= 2) {
+                    emit_byte(tAsm.instruction_offset >> 8);
                 }
             }
         }
     }
-    if (assembler_step == 2) {
+    if (tAsm.assembler_step == 2) {
         if (undefined) {
-            fprintf(stderr, "Error: undefined label '%s' at line %d\n", undefined_name, line_number);
+            fprintf(stderr, "Error: undefined label '%s' at line %d\n", tAsm.undefined_name, tAsm.line_number);
         }
     }
     return p;
@@ -1103,16 +1108,16 @@ void to_lowercase(char *p)
 void separate(void)
 {
     char *p2;
-    
-    while (*p && isspace(*p))
-        p++;
-    prev_p = p;
-    p2 = part;
-    while (*p && !isspace(*p) && *p != ';')
-        *p2++ = *p++;
+
+    while (*tAsm.p && isspace(*tAsm.p))
+        tAsm.p++;
+    tAsm.prev_p = tAsm.p;
+    p2 = tAsm.part;
+    while (*tAsm.p && !isspace(*tAsm.p) && *tAsm.p != ';')
+        *p2++ = *tAsm.p++;
     *p2 = '\0';
-    while (*p && isspace(*p))
-        p++;
+    while (*tAsm.p && isspace(*tAsm.p))
+        tAsm.p++;
 }
 
 /*
@@ -1122,8 +1127,8 @@ void check_end(char *p)
 {
     p = avoid_spaces(p);
     if (*p && *p != ';') {
-        fprintf(stderr, "Error: extra characters at end of line %d\n", line_number);
-        errors++;
+        fprintf(stderr, "Error: extra characters at end of line %d\n", tAsm.line_number);
+        tAsm.errors++;
     }
 }
 
@@ -1133,17 +1138,17 @@ void check_end(char *p)
 void message(int error, char *message)
 {
     if (error) {
-        fprintf(stderr, "Error: %s at line %d\n", message, line_number);
-        errors++;
+        fprintf(stderr, "Error: %s at line %d\n", message, tAsm.line_number);
+        tAsm.errors++;
     } else {
-        fprintf(stderr, "Warning: %s at line %d\n", message, line_number);
-        warnings++;
+        fprintf(stderr, "Warning: %s at line %d\n", message, tAsm.line_number);
+        tAsm.warnings++;
     }
-    if (listing != NULL) {
+    if (tAsm.listing != NULL) {
         if (error) {
-            fprintf(listing, "Error: %s at line %d\n", message, line_number);
+            fprintf(tAsm.listing, "Error: %s at line %d\n", message, tAsm.line_number);
         } else {
-            fprintf(listing, "Warning: %s at line %d\n", message, line_number);
+            fprintf(tAsm.listing, "Warning: %s at line %d\n", message, tAsm.line_number);
         }
     }
 }
@@ -1156,79 +1161,79 @@ void process_instruction(void)
     char *p2 = NULL;
     char *p3;
     int c;
-    
-    if (strcmp(part, "DB") == 0) {  /* Define byte */
+
+    if (strcmp(tAsm.part, "DB") == 0) {  /* Define byte */
         while (1) {
-            p = avoid_spaces(p);
-            if (*p == '"') {    /* ASCII text */
-                p++;
-                while (*p && *p != '"') {
-                    p = read_character(p, &c);
+            tAsm.p = avoid_spaces(tAsm.p);
+            if (*tAsm.p == '"') {    /* ASCII text */
+                tAsm.p++;
+                while (*tAsm.p && *tAsm.p != '"') {
+                    tAsm.p = read_character(tAsm.p, &c);
                     emit_byte(c);
                 }
-                if (*p) {
-                    p++;
+                if (*tAsm.p) {
+                    tAsm.p++;
                 } else {
-                    fprintf(stderr, "Error: unterminated string at line %d\n", line_number);
+                    fprintf(stderr, "Error: unterminated string at line %d\n", tAsm.line_number);
                 }
             } else {
                 undefined = 0;
-                p2 = match_expression(p, &instruction_value);
+                p2 = match_expression(tAsm.p, &tAsm.instruction_value);
                 if (p2 == NULL) {
-                    fprintf(stderr, "Error: bad expression at line %d\n", line_number);
+                    fprintf(stderr, "Error: bad expression at line %d\n", tAsm.line_number);
                     break;
-                } else if (assembler_step == 2 && undefined) {
-                    fprintf(stderr, "Error: undefined label '%s' at line %d\n", undefined_name, line_number);
+                } else if (tAsm.assembler_step == 2 && undefined) {
+                    fprintf(stderr, "Error: undefined label '%s' at line %d\n", tAsm.undefined_name, tAsm.line_number);
                     break;
                 }
-                emit_byte(instruction_value);
-                p = p2;
+                emit_byte(tAsm.instruction_value);
+                tAsm.p = p2;
             }
-            p = avoid_spaces(p);
-            if (*p == ',') {
-                p++;
+            tAsm.p = avoid_spaces(tAsm.p);
+            if (*tAsm.p == ',') {
+                tAsm.p++;
                 continue;
             }
-            check_end(p);
+            check_end(tAsm.p);
             break;
         }
         return;
     }
-    if (strcmp(part, "DW") == 0) {  /* Define word */
+    if (strcmp(tAsm.part, "DW") == 0) {  /* Define word */
         while (1) {
             undefined = 0;
-            p2 = match_expression(p, &instruction_value);
+            p2 = match_expression(tAsm.p, &tAsm.instruction_value);
             if (p2 == NULL) {
-                fprintf(stderr, "Error: bad expression at line %d\n", line_number);
+                fprintf(stderr, "Error: bad expression at line %d\n", tAsm.line_number);
                 break;
-            } else if (assembler_step == 2 && undefined) {
-                fprintf(stderr, "Error: undefined label '%s' at line %d\n", undefined_name, line_number);
+            } else if (tAsm.assembler_step == 2 && undefined) {
+                fprintf(stderr, "Error: undefined label '%s' at line %d\n", tAsm.undefined_name, tAsm.line_number);
                 break;
             }
-            emit_byte(instruction_value);
-            emit_byte(instruction_value >> 8);
-            p = avoid_spaces(p2);
-            if (*p == ',') {
-                p++;
+            emit_byte(tAsm.instruction_value);
+            emit_byte(tAsm.instruction_value >> 8);
+            tAsm.p = avoid_spaces(p2);
+            if (*tAsm.p == ',') {
+                tAsm.p++;
                 continue;
             }
-            check_end(p);
+            check_end(tAsm.p);
             break;
         }
         return;
     }
-    while (part[0]) {   /* Match against instruction set */
+    while (tAsm.part[0]) {   /* Match against instruction set */
         c = 0;
         while (instruction_set[c] != NULL) {
-            if (strcmp(part, instruction_set[c]) == 0) {
+            if (strcmp(tAsm.part, instruction_set[c]) == 0) {
                 p2 = instruction_set[c];
                 while (*p2++) ;
                 p3 = p2;
                 while (*p3++) ;
-                
-                p2 = match(p, p2, p3);
+
+                p2 = match(tAsm.p, p2, p3);
                 if (p2 != NULL) {
-                    p = p2;
+                    tAsm.p = p2;
                     break;
                 }
             }
@@ -1236,12 +1241,12 @@ void process_instruction(void)
         }
         if (instruction_set[c] == NULL) {
             char m[25 + MAX_SIZE];
-            
-            sprintf(m, "Undefined instruction '%s %s'", part, p);
+
+            sprintf(m, "Undefined instruction '%s %s'", tAsm.part, tAsm.p);
             message(1, m);
             break;
         } else {
-            p = p2;
+            tAsm.p = p2;
             separate();
         }
     }
@@ -1253,7 +1258,7 @@ void process_instruction(void)
  */
 void reset_address(void)
 {
-    address = start_address = default_start_address;
+    tAsm.address = tAsm.start_address = tAsm.default_start_address;
 }
 
 /*
@@ -1265,20 +1270,20 @@ void incbin(char *fname)
     char buf[256];
     int size;
     int i;
-    
+
     input = fopen(fname, "rb");
     if (input == NULL) {
         sprintf(buf, "Error: Cannot open '%s' for input", fname);
         message(1, buf);
         return;
     }
-    
+
     while ((size = fread(buf, 1, sizeof(buf), input)) != 0) {
         for (i = 0; i < size; i++) {
             emit_byte(buf[i]);
         }
     }
-    
+
     fclose(input);
 }
 
@@ -1302,179 +1307,179 @@ void do_assembly(char *fname)
     input = fopen(fname, "r");
     if (input == NULL) {
         fprintf(stderr, "Error: cannot open '%s' for input\n", fname);
-        errors++;
+        tAsm.errors++;
         return;
     }
 
-    pfname = input_filename;
-    pline = line_number;
-    input_filename = fname;
+    pfname = tAsm.input_filename;
+    pline = tAsm.line_number;
+    tAsm.input_filename = fname;
     level = 0;
     avoid_level = -1;
-    global_label[0] = '\0';
-    line_number = 0;
+    tAsm.global_label[0] = '\0';
+    tAsm.line_number = 0;
     base = 0;
-    while (fgets(line, sizeof(line), input)) {
-        line_number++;
-        p = line;
-        while (*p) {
-            if (*p == '\'' && *(p - 1) != '\\') {
-                p++;
-                while (*p && *p != '\'' && *(p - 1) != '\\')
-                    p++;
-            } else if (*p == '"' && *(p - 1) != '\\') {
-                p++;
-                while (*p && *p != '"' && *(p - 1) != '\\')
-                    p++;
-            } else if (*p == ';') {
-                while (*p)
-                    p++;
+    while (fgets(tAsm.line, sizeof(tAsm.line), input)) {
+        tAsm.line_number++;
+        tAsm.p = tAsm.line;
+        while (*tAsm.p) {
+            if (*tAsm.p == '\'' && *(tAsm.p - 1) != '\\') {
+                tAsm.p++;
+                while (*tAsm.p && *tAsm.p != '\'' && *(tAsm.p - 1) != '\\')
+                    tAsm.p++;
+            } else if (*tAsm.p == '"' && *(tAsm.p - 1) != '\\') {
+                tAsm.p++;
+                while (*tAsm.p && *tAsm.p != '"' && *(tAsm.p - 1) != '\\')
+                    tAsm.p++;
+            } else if (*tAsm.p == ';') {
+                while (*tAsm.p)
+                    tAsm.p++;
                 break;
             }
-            *p = toupper(*p);
-            p++;
+            *tAsm.p = toupper(*tAsm.p);
+            tAsm.p++;
         }
-        if (p > line && *(p - 1) == '\n')
-            p--;
-        *p = '\0';
+        if (tAsm.p > tAsm.line && *(tAsm.p - 1) == '\n')
+            tAsm.p--;
+        *tAsm.p = '\0';
 
-        base = address;
-        g = generated;
+        base = tAsm.address;
+        tAsm.g = tAsm.generated;
         include = 0;
 
         while (1) {
-            p = line;
+            tAsm.p = tAsm.line;
             separate();
-            if (part[0] == '\0' && (*p == '\0' || *p == ';'))    /* Empty line */
+            if (tAsm.part[0] == '\0' && (*tAsm.p == '\0' || *tAsm.p == ';'))    /* Empty line */
                 break;
-            if (part[0] != '\0' && part[strlen(part) - 1] == ':') {	/* Label */
-                part[strlen(part) - 1] = '\0';
-                if (part[0] == '.') {
-                    strcpy(name, global_label);
-                    strcat(name, part);
+            if (tAsm.part[0] != '\0' && tAsm.part[strlen(tAsm.part) - 1] == ':') {    /* Label */
+                tAsm.part[strlen(tAsm.part) - 1] = '\0';
+                if (tAsm.part[0] == '.') {
+                    strcpy(tAsm.name, tAsm.global_label);
+                    strcat(tAsm.name, tAsm.part);
                 } else {
-                    strcpy(name, part);
-                    strcpy(global_label, name);
+                    strcpy(tAsm.name, tAsm.part);
+                    strcpy(tAsm.global_label, tAsm.name);
                 }
                 separate();
                 if (avoid_level == -1 || level < avoid_level) {
-                    if (strcmp(part, "EQU") == 0) {
-                        p2 = match_expression(p, &instruction_value);
+                    if (strcmp(tAsm.part, "EQU") == 0) {
+                        p2 = match_expression(tAsm.p, &tAsm.instruction_value);
                         if (p2 == NULL) {
                             message(1, "bad expression");
                         } else {
-                            if (assembler_step == 1) {
-                                if (find_label(name)) {
+                            if (tAsm.assembler_step == 1) {
+                                if (find_label(tAsm.name)) {
                                     char m[18 + MAX_SIZE];
-                                    
-                                    sprintf(m, "Redefined label '%s'", name);
+
+                                    sprintf(m, "Redefined label '%s'", tAsm.name);
                                     message(1, m);
                                 } else {
-                                    last_label = define_label(name, instruction_value);
+                                    last_label = define_label(tAsm.name, tAsm.instruction_value);
                                 }
                             } else {
-                                last_label = find_label(name);
+                                last_label = find_label(tAsm.name);
                                 if (last_label == NULL) {
                                     char m[33 + MAX_SIZE];
-                                    
-                                    sprintf(m, "Inconsistency, label '%s' not found", name);
+
+                                    sprintf(m, "Inconsistency, label '%s' not found", tAsm.name);
                                     message(1, m);
                                 } else {
-                                    if (last_label->value != instruction_value) {
+                                    if (last_label->value != tAsm.instruction_value) {
 #ifdef DEBUG
-/*                                        fprintf(stderr, "Woops: label '%s' changed value from %04x to %04x\n", last_label->name, last_label->value, instruction_value);*/
+/*                                        fprintf(stderr, "Woops: label '%s' changed value from %04x to %04x\n", last_label->name, last_label->value, tAsm.instruction_value);*/
 #endif
-                                        change = 1;
+                                        tAsm.change = 1;
                                     }
-                                    last_label->value = instruction_value;
+                                    last_label->value = tAsm.instruction_value;
                                 }
                             }
                             check_end(p2);
                         }
                         break;
                     }
-                    if (first_time == 1) {
+                    if (tAsm.first_time == 1) {
 #ifdef DEBUG
-                        /*                        fprintf(stderr, "First time '%s' at line %d\n", line, line_number);*/
+                        /*                        fprintf(stderr, "First time '%s' at line %d\n", tAsm.line, tAsm.line_number);*/
 #endif
-                        first_time = 0;
+                        tAsm.first_time = 0;
                         reset_address();
                     }
-                    if (assembler_step == 1) {
-                        if (find_label(name)) {
+                    if (tAsm.assembler_step == 1) {
+                        if (find_label(tAsm.name)) {
                             char m[18 + MAX_SIZE];
-                            
-                            sprintf(m, "Redefined label '%s'", name);
+
+                            sprintf(m, "Redefined label '%s'", tAsm.name);
                             message(1, m);
                         } else {
-                            last_label = define_label(name, address);
+                            last_label = define_label(tAsm.name, tAsm.address);
                         }
                     } else {
-                        last_label = find_label(name);
+                        last_label = find_label(tAsm.name);
                         if (last_label == NULL) {
                             char m[33 + MAX_SIZE];
-                            
-                            sprintf(m, "Inconsistency, label '%s' not found", name);
+
+                            sprintf(m, "Inconsistency, label '%s' not found", tAsm.name);
                             message(1, m);
                         } else {
-                            if (last_label->value != address) {
+                            if (last_label->value != tAsm.address) {
 #ifdef DEBUG
-/*                                fprintf(stderr, "Woops: label '%s' changed value from %04x to %04x\n", last_label->name, last_label->value, address);*/
+/*                                fprintf(stderr, "Woops: label '%s' changed value from %04x to %04x\n", last_label->name, last_label->value, tAsm.address);*/
 #endif
-                                change = 1;
+                                tAsm.change = 1;
                             }
-                            last_label->value = address;
+                            last_label->value = tAsm.address;
                         }
-                        
+
                     }
                 }
             }
-            if (strcmp(part, "%IF") == 0) {
+            if (strcmp(tAsm.part, "%IF") == 0) {
                 level++;
                 if (avoid_level != -1 && level >= avoid_level)
                     break;
                 undefined = 0;
-                p = match_expression(p, &instruction_value);
-                if (p == NULL) {
+                tAsm.p = match_expression(tAsm.p, &tAsm.instruction_value);
+                if (tAsm.p == NULL) {
                     message(1, "Bad expression");
                 } else if (undefined) {
                     message(1, "Undefined labels");
                 }
-                if (instruction_value != 0) {
+                if (tAsm.instruction_value != 0) {
                     ;
                 } else {
                     avoid_level = level;
                 }
-                check_end(p);
+                check_end(tAsm.p);
                 break;
             }
-            if (strcmp(part, "%IFDEF") == 0) {
+            if (strcmp(tAsm.part, "%IFDEF") == 0) {
                 level++;
                 if (avoid_level != -1 && level >= avoid_level)
                     break;
                 separate();
-                if (find_label(part) != NULL) {
+                if (find_label(tAsm.part) != NULL) {
                     ;
                 } else {
                     avoid_level = level;
                 }
-                check_end(p);
+                check_end(tAsm.p);
                 break;
             }
-            if (strcmp(part, "%IFNDEF") == 0) {
+            if (strcmp(tAsm.part, "%IFNDEF") == 0) {
                 level++;
                 if (avoid_level != -1 && level >= avoid_level)
                     break;
                 separate();
-                if (find_label(part) == NULL) {
+                if (find_label(tAsm.part) == NULL) {
                     ;
                 } else {
                     avoid_level = level;
                 }
-                check_end(p);
+                check_end(tAsm.p);
                 break;
             }
-            if (strcmp(part, "%ELSE") == 0) {
+            if (strcmp(tAsm.part, "%ELSE") == 0) {
                 if (avoid_level != -1 && level > avoid_level)
                     break;
                 if (avoid_level == level) {
@@ -1482,107 +1487,107 @@ void do_assembly(char *fname)
                 } else if (avoid_level == -1) {
                     avoid_level = level;
                 }
-                check_end(p);
+                check_end(tAsm.p);
                 break;
             }
-            if (strcmp(part, "%ENDIF") == 0) {
+            if (strcmp(tAsm.part, "%ENDIF") == 0) {
                 if (avoid_level == level)
                     avoid_level = -1;
                 level--;
-                check_end(p);
+                check_end(tAsm.p);
                 break;
             }
             if (avoid_level != -1 && level >= avoid_level) {
 #ifdef DEBUG
-                /*fprintf(stderr, "Avoiding '%s'\n", line);*/
+                /*fprintf(stderr, "Avoiding '%s'\n", tAsm.line);*/
 #endif
                 break;
             }
-            if (strcmp(part, "USE16") == 0) {
+            if (strcmp(tAsm.part, "USE16") == 0) {
                 break;
             }
-            if (strcmp(part, "CPU") == 0) {
-                p = avoid_spaces(p);
-                if (memcmp(p, "8086", 4) != 0)
+            if (strcmp(tAsm.part, "CPU") == 0) {
+                tAsm.p = avoid_spaces(tAsm.p);
+                if (memcmp(tAsm.p, "8086", 4) != 0)
                     message(1, "Unsupported processor requested");
                 break;
             }
-            if (strcmp(part, "%INCLUDE") == 0) {
+            if (strcmp(tAsm.part, "%INCLUDE") == 0) {
                 separate();
-                check_end(p);
-                if (part[0] != '"' || part[strlen(part) - 1] != '"') {
+                check_end(tAsm.p);
+                if (tAsm.part[0] != '"' || tAsm.part[strlen(tAsm.part) - 1] != '"') {
                     message(1, "Missing quotes on %include");
                     break;
                 }
                 include = 1;
                 break;
             }
-            if (strcmp(part, "INCBIN") == 0) {
+            if (strcmp(tAsm.part, "INCBIN") == 0) {
                 separate();
-                check_end(p);
-                if (part[0] != '"' || part[strlen(part) - 1] != '"') {
+                check_end(tAsm.p);
+                if (tAsm.part[0] != '"' || tAsm.part[strlen(tAsm.part) - 1] != '"') {
                     message(1, "Missing quotes on incbin");
                     break;
                 }
                 include = 2;
                 break;
             }
-            if (strcmp(part, "ORG") == 0) {
-                p = avoid_spaces(p);
+            if (strcmp(tAsm.part, "ORG") == 0) {
+                tAsm.p = avoid_spaces(tAsm.p);
                 undefined = 0;
-                p2 = match_expression(p, &instruction_value);
+                p2 = match_expression(tAsm.p, &tAsm.instruction_value);
                 if (p2 == NULL) {
                     message(1, "Bad expression");
                 } else if (undefined) {
                     message(1, "Cannot use undefined labels");
                 } else {
-                    if (first_time == 1) {
-                        first_time = 0;
-                        address = instruction_value;
-                        start_address = instruction_value;
-                        base = address;
+                    if (tAsm.first_time == 1) {
+                        tAsm.first_time = 0;
+                        tAsm.address = tAsm.instruction_value;
+                        tAsm.start_address = tAsm.instruction_value;
+                        base = tAsm.address;
                     } else {
-                        if (instruction_value < address) {
+                        if (tAsm.instruction_value < tAsm.address) {
                             message(1, "Backward address");
                         } else {
-                            while (address < instruction_value)
+                            while (tAsm.address < tAsm.instruction_value)
                                 emit_byte(0);
-                            
+
                         }
                     }
                     check_end(p2);
                 }
                 break;
             }
-            if (strcmp(part, "ALIGN") == 0) {
-                p = avoid_spaces(p);
+            if (strcmp(tAsm.part, "ALIGN") == 0) {
+                tAsm.p = avoid_spaces(tAsm.p);
                 undefined = 0;
-                p2 = match_expression(p, &instruction_value);
+                p2 = match_expression(tAsm.p, &tAsm.instruction_value);
                 if (p2 == NULL) {
                     message(1, "Bad expression");
                 } else if (undefined) {
                     message(1, "Cannot use undefined labels");
                 } else {
-                    align = address / instruction_value;
-                    align = align * instruction_value;
-                    align = align + instruction_value;
-		    while (address < align)
-		        emit_byte(0x90);
+                    align = tAsm.address / tAsm.instruction_value;
+                    align = align * tAsm.instruction_value;
+                    align = align + tAsm.instruction_value;
+                    while (tAsm.address < align)
+                        emit_byte(0x90);
                     check_end(p2);
                 }
                 break;
             }
-            if (first_time == 1) {
+            if (tAsm.first_time == 1) {
 #ifdef DEBUG
-                /*fprintf(stderr, "First time '%s' at line %d\n", line, line_number);*/
+                /*fprintf(stderr, "First time '%s' at line %d\n", tAsm.line, tAsm.line_number);*/
 #endif
-                first_time = 0;
+                tAsm.first_time = 0;
                 reset_address();
             }
             times = 1;
-            if (strcmp(part, "TIMES") == 0) {
+            if (strcmp(tAsm.part, "TIMES") == 0) {
                 undefined = 0;
-                p2 = match_expression(p, &instruction_value);
+                p2 = match_expression(tAsm.p, &tAsm.instruction_value);
                 if (p2 == NULL) {
                     message(1, "bad expression");
                     break;
@@ -1591,48 +1596,48 @@ void do_assembly(char *fname)
                     message(1, "non-constant expression");
                     break;
                 }
-                times = instruction_value;
-                p = p2;
+                times = tAsm.instruction_value;
+                tAsm.p = p2;
                 separate();
             }
-            base = address;
-            g = generated;
-            p3 = prev_p;
+            base = tAsm.address;
+            tAsm.g = tAsm.generated;
+            p3 = tAsm.prev_p;
             while (times) {
-                p = p3;
+                tAsm.p = p3;
                 separate();
                 process_instruction();
                 times--;
             }
             break;
         }
-        if (assembler_step == 2 && listing != NULL) {
-            if (first_time)
-                fprintf(listing, "      ");
+        if (tAsm.assembler_step == 2 && tAsm.listing != NULL) {
+            if (tAsm.first_time)
+                fprintf(tAsm.listing, "      ");
             else
-                fprintf(listing, "%04X  ", base);
-            p = generated;
-            while (p < g) {
-                fprintf(listing, "%02X", *p++ & 255);
+                fprintf(tAsm.listing, "%04X  ", base);
+            tAsm.p = tAsm.generated;
+            while (tAsm.p < tAsm.g) {
+                fprintf(tAsm.listing, "%02X", *tAsm.p++ & 255);
             }
-            while (p < generated + sizeof(generated)) {
-                fprintf(listing, "  ");
-                p++;
+            while (tAsm.p < tAsm.generated + sizeof(tAsm.generated)) {
+                fprintf(tAsm.listing, "  ");
+                tAsm.p++;
             }
-            fprintf(listing, "  %05d %s\n", line_number, line);
+            fprintf(tAsm.listing, "  %05d %s\n", tAsm.line_number, tAsm.line);
         }
         if (include == 1) {
-            part[strlen(part) - 1] = '\0';
-            do_assembly(part + 1);
+            tAsm.part[strlen(tAsm.part) - 1] = '\0';
+            do_assembly(tAsm.part + 1);
         }
         if (include == 2) {
-            part[strlen(part) - 1] = '\0';
-            incbin(part + 1);
+            tAsm.part[strlen(tAsm.part) - 1] = '\0';
+            incbin(tAsm.part + 1);
         }
     }
     fclose(input);
-    line_number = pline;
-    input_filename = pfname;
+    tAsm.line_number = pline;
+    tAsm.input_filename = pfname;
 }
 
 /*
@@ -1644,7 +1649,7 @@ int main(int argc, char *argv[])
     int d;
     char *p;
     char *ifname;
-    
+
     /*
      ** If ran without arguments then show usage
      */
@@ -1653,14 +1658,14 @@ int main(int argc, char *argv[])
         fprintf(stderr, "tinyasm -f bin input.asm -o input.bin\n");
         exit(1);
     }
-    
+
     /*
      ** Start to collect arguments
      */
     ifname = NULL;
-    output_filename = NULL;
-    listing_filename = NULL;
-    default_start_address = 0;
+    tAsm.output_filename = NULL;
+    tAsm.listing_filename = NULL;
+    tAsm.default_start_address = 0;
     c = 1;
     while (c < argc) {
         if (argv[c][0] == '-') {    /* All arguments start with dash */
@@ -1673,9 +1678,9 @@ int main(int argc, char *argv[])
                 } else {
                     to_lowercase(argv[c]);
                     if (strcmp(argv[c], "bin") == 0) {
-                        default_start_address = 0;
+                        tAsm.default_start_address = 0;
                     } else if (strcmp(argv[c], "com") == 0) {
-                        default_start_address = 0x0100;
+                        tAsm.default_start_address = 0x0100;
                     } else {
                         fprintf(stderr, "Error: only 'bin', 'com' supported for -f (it is '%s')\n", argv[c]);
                         exit(1);
@@ -1687,11 +1692,11 @@ int main(int argc, char *argv[])
                 if (c >= argc) {
                     fprintf(stderr, "Error: no argument for -o\n");
                     exit(1);
-                } else if (output_filename != NULL) {
+                } else if (tAsm.output_filename != NULL) {
                     fprintf(stderr, "Error: already a -o argument is present\n");
                     exit(1);
                 } else {
-                    output_filename = argv[c];
+                    tAsm.output_filename = argv[c];
                     c++;
                 }
             } else if (d == 'l') {  /* Listing file name */
@@ -1699,11 +1704,11 @@ int main(int argc, char *argv[])
                 if (c >= argc) {
                     fprintf(stderr, "Error: no argument for -l\n");
                     exit(1);
-                } else if (listing_filename != NULL) {
+                } else if (tAsm.listing_filename != NULL) {
                     fprintf(stderr, "Error: already a -l argument is present\n");
                     exit(1);
                 } else {
-                    listing_filename = argv[c];
+                    tAsm.listing_filename = argv[c];
                     c++;
                 }
             } else if (d == 'd') {  /* Define label */
@@ -1715,7 +1720,7 @@ int main(int argc, char *argv[])
                 if (*p == '=') {
                     *p++ = 0;
                     undefined = 0;
-                    p = match_expression(p, &instruction_value);
+                    p = match_expression(p, &tAsm.instruction_value);
                     if (p == NULL) {
                         fprintf(stderr, "Error: wrong label definition\n");
                         exit(1);
@@ -1723,7 +1728,7 @@ int main(int argc, char *argv[])
                         fprintf(stderr, "Error: non-constant label definition\n");
                         exit(1);
                     } else {
-                        define_label(argv[c] + 2, instruction_value);
+                        define_label(argv[c] + 2, tAsm.instruction_value);
                     }
                 }
                 c++;
@@ -1741,75 +1746,76 @@ int main(int argc, char *argv[])
             c++;
         }
     }
-    
+
     if (ifname == NULL) {
         fprintf(stderr, "No input filename provided\n");
         exit(1);
     }
-    
+
     /*
      ** Do first step of assembly
      */
-    assembler_step = 1;
-    first_time = 1;
+    tAsm.assembler_step = 1;
+    tAsm.first_time = 1;
     do_assembly(ifname);
-    if (!errors) {
-        
+    if (!tAsm.errors) {
+
         /*
          ** Do second step of assembly and generate final output
          */
-        if (output_filename == NULL) {
+        if (tAsm.output_filename == NULL) {
             fprintf(stderr, "No output filename provided\n");
             exit(1);
         }
-        change_number = 0;
+        tAsm.change_number = 0;
         do {
-            change = 0;
-            if (listing_filename != NULL) {
-                listing = fopen(listing_filename, "w");
-                if (listing == NULL) {
-                    fprintf(stderr, "Error: couldn't open '%s' as listing file\n", output_filename);
+            tAsm.change = 0;
+            if (tAsm.listing_filename != NULL) {
+                tAsm.listing = fopen(tAsm.listing_filename, "w");
+                if (tAsm.listing == NULL) {
+                    fprintf(stderr, "Error: couldn't open '%s' as listing file\n", tAsm.output_filename);
                     exit(1);
                 }
             }
-            output = fopen(output_filename, "wb");
-            if (output == NULL) {
-                fprintf(stderr, "Error: couldn't open '%s' as output file\n", output_filename);
+            tAsm.output = fopen(tAsm.output_filename, "wb");
+            if (tAsm.output == NULL) {
+                fprintf(stderr, "Error: couldn't open '%s' as output file\n", tAsm.output_filename);
                 exit(1);
             }
-            assembler_step = 2;
-            first_time = 1;
+            tAsm.assembler_step = 2;
+            tAsm.first_time = 1;
             do_assembly(ifname);
-            
-            if (listing != NULL && change == 0) {
-                fprintf(listing, "\n%05d ERRORS FOUND\n", errors);
-                fprintf(listing, "%05d WARNINGS FOUND\n\n", warnings);
-                fprintf(listing, "%05d PROGRAM BYTES\n\n", bytes);
+
+            if (tAsm.listing != NULL && tAsm.change == 0) {
+                fprintf(tAsm.listing, "\n%05d ERRORS FOUND\n", tAsm.errors);
+                fprintf(tAsm.listing, "%05d WARNINGS FOUND\n\n", tAsm.warnings);
+                fprintf(tAsm.listing, "%05d PROGRAM BYTES\n\n", tAsm.bytes);
                 if (label_list != NULL) {
-                    fprintf(listing, "%-20s VALUE/ADDRESS\n\n", "LABEL");
+                    fprintf(tAsm.listing, "%-20s VALUE/ADDRESS\n\n", "LABEL");
                     sort_labels(label_list);
                 }
             }
-            fclose(output);
-            if (listing_filename != NULL)
-                fclose(listing);
-            if (change) {
-                change_number++;
-                if (change_number == 5) {
+            fclose(tAsm.output);
+            if (tAsm.listing_filename != NULL)
+                fclose(tAsm.listing);
+            if (tAsm.change) {
+                tAsm.change_number++;
+                if (tAsm.change_number == 5) {
                     fprintf(stderr, "Aborted: Couldn't stabilize moving label\n");
-                    errors++;
+                    tAsm.errors++;
                 }
             }
-            if (errors) {
-                remove(output_filename);
-                if (listing_filename != NULL)
-                    remove(listing_filename);
+            if (tAsm.errors) {
+                remove(tAsm.output_filename);
+                if (tAsm.listing_filename != NULL)
+                    remove(tAsm.listing_filename);
                 exit(1);
             }
-        } while (change) ;
+        } while (tAsm.change) ;
 
         exit(0);
     }
 
     exit(1);
 }
+/* vim: set tabstop=4 softtabstop=4 expandtab shiftwidth=4 autoindent: */

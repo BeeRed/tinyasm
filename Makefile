@@ -13,6 +13,9 @@ CFLAGS 	+=	-std=gnu18
 CFLAGS 	+=	-pedantic
 CFLAGS 	+=	-Wold-style-definition
 CFLAGS 	+=	-Wmissing-prototypes
+CFLAGS 	+=	-Wstrict-prototypes
+CFLAGS 	+=	-Wmissing-declarations
+CFLAGS 	+=	-Wshadow
 CFLAGS 	+=	-O3
 CFLAGS 	+=	-g
 
