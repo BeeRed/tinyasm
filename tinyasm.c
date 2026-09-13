@@ -103,9 +103,7 @@ char *match_register(), *match_expression(),
 /*
  ** Define a new label
  */
-struct label *define_label(name, value)
-    char *name;
-    int value;
+struct label *define_label(char *name, int value)
 {
     struct label *label;
     struct label *explore;
@@ -153,8 +151,7 @@ struct label *define_label(name, value)
 /*
  ** Find a label
  */
-struct label *find_label(name)
-    char *name;
+struct label *find_label(char *name)
 {
     struct label *explore;
     int c;
@@ -176,8 +173,7 @@ struct label *find_label(name)
 /*
  ** Sort recursively labels (already done by binary tree)
  */
-void sort_labels(node)
-    struct label *node;
+void sort_labels(struct label *node)
 {
     if (node->left != NULL)
         sort_labels(node->left);
@@ -189,8 +185,7 @@ void sort_labels(node)
 /*
  ** Avoid spaces in input
  */
-char *avoid_spaces(p)
-    char *p;
+char *avoid_spaces(char *p)
 {
     while (isspace(*p))
         p++;
@@ -200,9 +195,7 @@ char *avoid_spaces(p)
 /*
  ** Match addressing
  */
-char *match_addressing(p, width)
-    char *p;
-    int width;
+char *match_addressing(char *p, int width)
 {
     int reg;
     int reg2;
@@ -327,8 +320,7 @@ char *match_addressing(p, width)
 /*
  ** Check for a label character
  */
-int islabel(c)
-    int c;
+int islabel(int c)
 {
     return isalpha(c) || isdigit(c) || c == '_' || c == '.';
 }
@@ -336,10 +328,7 @@ int islabel(c)
 /*
  ** Match register
  */
-char *match_register(p, width, value)
-    char *p;
-    int width;
-    int *value;
+char *match_register(char *p, int width, int *value)
 {
     char reg[3];
     int c;
@@ -373,9 +362,7 @@ char *match_register(p, width, value)
 /*
  ** Read character for string or character literal
  */
-char *read_character(p, c)
-    char *p;
-    int *c;
+char *read_character(char *p, int *c)
 {
     if (*p == '\\') {
         p++;
@@ -434,9 +421,7 @@ char *read_character(p, c)
 /*
  ** Match expression (top tier)
  */
-char *match_expression(p, value)
-    char *p;
-    int *value;
+char *match_expression(char *p, int *value)
 {
     int value1;
     
@@ -461,9 +446,7 @@ char *match_expression(p, value)
 /*
  ** Match expression
  */
-char *match_expression_level1(p, value)
-    char *p;
-    int *value;
+char *match_expression_level1(char *p, int *value)
 {
     int value1;
     
@@ -488,9 +471,7 @@ char *match_expression_level1(p, value)
 /*
  ** Match expression
  */
-char *match_expression_level2(p, value)
-    char *p;
-    int *value;
+char *match_expression_level2(char *p, int *value)
 {
     int value1;
     
@@ -515,9 +496,7 @@ char *match_expression_level2(p, value)
 /*
  ** Match expression
  */
-char *match_expression_level3(p, value)
-    char *p;
-    int *value;
+char *match_expression_level3(char *p, int *value)
 {
     int value1;
     
@@ -549,9 +528,7 @@ char *match_expression_level3(p, value)
 /*
  ** Match expression
  */
-char *match_expression_level4(p, value)
-    char *p;
-    int *value;
+char *match_expression_level4(char *p, int *value)
 {
     int value1;
     
@@ -583,9 +560,7 @@ char *match_expression_level4(p, value)
 /*
  ** Match expression
  */
-char *match_expression_level5(p, value)
-    char *p;
-    int *value;
+char *match_expression_level5(char *p, int *value)
 {
     int value1;
     
@@ -634,9 +609,7 @@ char *match_expression_level5(p, value)
 /*
  ** Match expression (bottom tier)
  */
-char *match_expression_level6(p, value)
-    char *p;
-    int *value;
+char *match_expression_level6(char *p, int *value)
 {
     int number;
     int c;
@@ -793,10 +766,7 @@ void emit_byte(int byte)
 /*
  ** Search for a match with instruction
  */
-char *match(p, pattern, decode)
-    char *p;
-    char *pattern;
-    char *decode;
+char *match(char *p, char *pattern, char *decode)
 {
     char *p2;
     int c;
@@ -1095,8 +1065,7 @@ char *match(p, pattern, decode)
 /*
  ** Make a string lowercase
  */
-void to_lowercase(p)
-    char *p;
+void to_lowercase(char *p)
 {
     while (*p) {
         *p = tolower(*p);
@@ -1125,8 +1094,7 @@ void separate(void)
 /*
  ** Check for end of line
  */
-void check_end(p)
-    char *p;
+void check_end(char *p)
 {
     p = avoid_spaces(p);
     if (*p && *p != ';') {
@@ -1138,9 +1106,7 @@ void check_end(p)
 /*
  ** Generate a message
  */
-void message(error, message)
-    int error;
-    char *message;
+void message(int error, char *message)
 {
     if (error) {
         fprintf(stderr, "Error: %s at line %d\n", message, line_number);
@@ -1161,7 +1127,7 @@ void message(error, message)
 /*
  ** Process an instruction
  */
-void process_instruction()
+void process_instruction(void)
 {
     char *p2 = NULL;
     char *p3;
@@ -1261,7 +1227,7 @@ void process_instruction()
  ** Reset current address.
  ** Called anytime the assembler needs to generate code.
  */
-void reset_address()
+void reset_address(void)
 {
     address = start_address = default_start_address;
 }
@@ -1269,8 +1235,7 @@ void reset_address()
 /*
  ** Include a binary file
  */
-void incbin(fname)
-    char *fname;
+void incbin(char *fname)
 {
     FILE *input;
     char buf[256];
@@ -1296,8 +1261,7 @@ void incbin(fname)
 /*
  ** Do an assembler step
  */
-void do_assembly(fname)
-    char *fname;
+void do_assembly(char *fname)
 {
     FILE *input;
     char *p2;
@@ -1650,9 +1614,7 @@ void do_assembly(fname)
 /*
  ** Main program
  */
-int main(argc, argv)
-    int argc;
-    char *argv[];
+int main(int argc, char *argv[])
 {
     int c;
     int d;
