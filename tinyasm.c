@@ -89,11 +89,35 @@ char *reg1[16] = {
     "DI"
 };
 
-void message();
-char *match_register(), *match_expression(),
-     *match_expression_level1(), *match_expression_level2(),
-     *match_expression_level3(), *match_expression_level4(),
-     *match_expression_level5(), *match_expression_level6();
+/* function prototypes */
+
+void message(int error, char *message);
+char *match_addressing	     (char *p, int width);
+char *match_register         (char *p, int width, int *value);
+char *match_expression       (char *p, int *value);
+char *match_expression_level1(char *p, int *value);
+char *match_expression_level2(char *p, int *value);
+char *match_expression_level3(char *p, int *value);
+char *match_expression_level4(char *p, int *value);
+char *match_expression_level5(char *p, int *value);
+char *match_expression_level6(char *p, int *value);
+
+struct label	*define_label(char *name, int value);
+struct label	*find_label(char *name);
+void	sort_labels(struct label *node);
+char	*avoid_spaces(char *p);
+int	islabel(int c);
+char	*read_character(char *p, int *c);
+void	emit_byte(int byte);
+char	*match(char *p, char *pattern, char *decode);
+void	to_lowercase(char *p);
+void	separate(void);
+void	check_end(char *p);
+void	process_instruction(void);
+void	reset_address(void);
+void	incbin(char *fname);
+void	do_assembly(char *fname);
+
 
 #ifdef __DESMET__
 /* Work around bug in DeSmet 3.1N runtime: closeall() overflows buffer and clobbers exit status */

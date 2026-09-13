@@ -12,6 +12,7 @@ CFLAGS 	=	-Wall
 CFLAGS 	+=	-std=gnu18
 CFLAGS 	+=	-pedantic
 CFLAGS 	+=	-Wold-style-definition
+CFLAGS 	+=	-Wmissing-prototypes
 CFLAGS 	+=	-O3
 CFLAGS 	+=	-g
 
