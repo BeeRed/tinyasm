@@ -71,9 +71,15 @@ struct _label_s {
     int         value;
     char        name[1];
 };
+typedef struct _tlabel_s    tlabel_t;
+struct _tlabel_s {
+    label_t     *list;
+    label_t     *last;
+    size_t      nlabel;
+};
 
-label_t *label_list;
-label_t *last_label;
+tlabel_t    tLab;
+
 int undefined;
 
 extern char *instruction_set[];
@@ -156,11 +162,12 @@ label_t *define_label(char *name, int value)
     label->value = value;
     strcpy(label->name, name);
 
+    tLab.nlabel++;
     /* Populate binary tree */
-    if (label_list == NULL) {
-        label_list = label;
+    if (tLab.list == NULL) {
+        tLab.list = label;
     } else {
-        explore = label_list;
+        explore = tLab.list;
         while (1) {
             c = strcmp(label->name, explore->name);
             if (c < 0) {
@@ -190,7 +197,7 @@ label_t *find_label(char *name)
     int c;
 
     /* Follows a binary tree */
-    explore = label_list;
+    explore = tLab.list;
     while (explore != NULL) {
         c = strcmp(name, explore->name);
         if (c == 0)
@@ -1379,23 +1386,23 @@ void do_assembly(char *fname)
                                     sprintf(m, "Redefined label '%s'", tAsm.name);
                                     message(1, m);
                                 } else {
-                                    last_label = define_label(tAsm.name, tAsm.instruction_value);
+                                    tLab.last = define_label(tAsm.name, tAsm.instruction_value);
                                 }
                             } else {
-                                last_label = find_label(tAsm.name);
-                                if (last_label == NULL) {
+                                tLab.last = find_label(tAsm.name);
+                                if (tLab.last == NULL) {
                                     char m[33 + MAX_SIZE];
 
                                     sprintf(m, "Inconsistency, label '%s' not found", tAsm.name);
                                     message(1, m);
                                 } else {
-                                    if (last_label->value != tAsm.instruction_value) {
+                                    if (tLab.last->value != tAsm.instruction_value) {
 #ifdef DEBUG
-                                        fprintf(stderr, "Woops: label '%s' changed value from %04x to %04x\n", last_label->name, last_label->value, tAsm.instruction_value);
+                                        fprintf(stderr, "Woops: label '%s' changed value from %04x to %04x\n", tLab.last->name, tLab.last->value, tAsm.instruction_value);
 #endif
                                         tAsm.change = 1;
                                     }
-                                    last_label->value = tAsm.instruction_value;
+                                    tLab.last->value = tAsm.instruction_value;
                                 }
                             }
                             check_end(p2);
@@ -1416,23 +1423,23 @@ void do_assembly(char *fname)
                             sprintf(m, "Redefined label '%s'", tAsm.name);
                             message(1, m);
                         } else {
-                            last_label = define_label(tAsm.name, tAsm.address);
+                            tLab.last = define_label(tAsm.name, tAsm.address);
                         }
                     } else {
-                        last_label = find_label(tAsm.name);
-                        if (last_label == NULL) {
+                        tLab.last = find_label(tAsm.name);
+                        if (tLab.last == NULL) {
                             char m[33 + MAX_SIZE];
 
                             sprintf(m, "Inconsistency, label '%s' not found", tAsm.name);
                             message(1, m);
                         } else {
-                            if (last_label->value != tAsm.address) {
+                            if (tLab.last->value != tAsm.address) {
 #ifdef DEBUG
-                                fprintf(stderr, "Woops: label '%s' changed value from %04x to %04x\n", last_label->name, last_label->value, tAsm.address);
+                                fprintf(stderr, "Woops: label '%s' changed value from %04x to %04x\n", tLab.last->name, tLab.last->value, tAsm.address);
 #endif
                                 tAsm.change = 1;
                             }
-                            last_label->value = tAsm.address;
+                            tLab.last->value = tAsm.address;
                         }
 
                     }
@@ -1808,9 +1815,10 @@ int main(int argc, char *argv[])
                 fprintf(tAsm.listing, "\n%05d ERRORS FOUND\n", tAsm.errors);
                 fprintf(tAsm.listing, "%05d WARNINGS FOUND\n\n", tAsm.warnings);
                 fprintf(tAsm.listing, "%05d PROGRAM BYTES\n\n", tAsm.bytes);
-                if (label_list != NULL) {
+                fprintf(tAsm.listing, "%05lu NUMBER LABELS\n\n", tLab.nlabel);
+                if (tLab.list != NULL) {
                     fprintf(tAsm.listing, "%-20s VALUE/ADDRESS\n\n", "LABEL");
-                    sort_labels(label_list);
+                    sort_labels(tLab.list);
                 }
             }
             fclose(tAsm.output);
