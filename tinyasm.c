@@ -1391,7 +1391,7 @@ void do_assembly(char *fname)
                                 } else {
                                     if (last_label->value != tAsm.instruction_value) {
 #ifdef DEBUG
-/*                                        fprintf(stderr, "Woops: label '%s' changed value from %04x to %04x\n", last_label->name, last_label->value, tAsm.instruction_value);*/
+                                        fprintf(stderr, "Woops: label '%s' changed value from %04x to %04x\n", last_label->name, last_label->value, tAsm.instruction_value);
 #endif
                                         tAsm.change = 1;
                                     }
@@ -1404,7 +1404,7 @@ void do_assembly(char *fname)
                     }
                     if (tAsm.first_time == 1) {
 #ifdef DEBUG
-                        /*                        fprintf(stderr, "First time '%s' at line %d\n", tAsm.line, tAsm.line_number);*/
+                        fprintf(stderr, "First time '%s' at line %d\n", tAsm.line, tAsm.line_number);
 #endif
                         tAsm.first_time = 0;
                         reset_address();
@@ -1428,7 +1428,7 @@ void do_assembly(char *fname)
                         } else {
                             if (last_label->value != tAsm.address) {
 #ifdef DEBUG
-/*                                fprintf(stderr, "Woops: label '%s' changed value from %04x to %04x\n", last_label->name, last_label->value, tAsm.address);*/
+                                fprintf(stderr, "Woops: label '%s' changed value from %04x to %04x\n", last_label->name, last_label->value, tAsm.address);
 #endif
                                 tAsm.change = 1;
                             }
@@ -1503,7 +1503,7 @@ void do_assembly(char *fname)
             }
             if (avoid_level != -1 && level >= avoid_level) {
 #ifdef DEBUG
-                /*fprintf(stderr, "Avoiding '%s'\n", tAsm.line);*/
+                fprintf(stderr, "Avoiding '%s'\n", tAsm.line);
 #endif
                 break;
             }
@@ -1583,7 +1583,7 @@ void do_assembly(char *fname)
             }
             if (tAsm.first_time == 1) {
 #ifdef DEBUG
-                /*fprintf(stderr, "First time '%s' at line %d\n", tAsm.line, tAsm.line_number);*/
+                fprintf(stderr, "First time '%s' at line %d\n", tAsm.line, tAsm.line_number);
 #endif
                 tAsm.first_time = 0;
                 reset_address();

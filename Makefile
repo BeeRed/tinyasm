@@ -34,6 +34,7 @@ CFLAGS 	+=	-Wunreachable-code
 CFLAGS 	+=	-Wconversion
 CFLAGS 	+=	-O3
 CFLAGS 	+=	-g
+CFLAGS 	+=	-DDEBUG=1
 
 SRCS	= 	tinyasm.c
 SRCS	+= 	ins.c
