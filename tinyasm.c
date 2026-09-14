@@ -124,6 +124,7 @@ void    process_instruction(void);
 void    reset_address(void);
 void    incbin(char *fname);
 void    do_assembly(char *fname);
+void    usage(int err);
 
 
 #ifdef __DESMET__
@@ -1642,6 +1643,19 @@ void do_assembly(char *fname)
     tAsm.input_filename = pfname;
 }
 
+void usage(int err)
+{
+    fprintf(stderr, "\nTypical usage:\n");
+    fprintf(stderr, "tinyasm [-f bin] [-l listfile] [-dlabel=123] -o input.bin input.asm\n");
+    fprintf(stderr, "\t -f format\tdefault=bin, com\tstartaddr: bin=0x0, com=0x100\n");
+    fprintf(stderr, "\t -o outfile\toutput  filename\n");
+    fprintf(stderr, "\t -l listfile\tlisting filename\n");
+    fprintf(stderr, "\t -dLABEL=value\tdefine a label(converted to uppercase) with value\n");
+    if(err) {
+        exit(err);
+    }
+}
+
 /*
  ** Main program
  */
@@ -1656,9 +1670,8 @@ int main(int argc, char *argv[])
      ** If ran without arguments then show usage
      */
     if (argc == 1) {
-        fprintf(stderr, "Typical usage:\n");
-        fprintf(stderr, "tinyasm -f bin input.asm -o input.bin\n");
-        exit(1);
+        fprintf(stderr, "ERR: not enough arguments\n");
+        usage(1);
     }
 
     /*
@@ -1684,19 +1697,19 @@ int main(int argc, char *argv[])
                     } else if (strcmp(argv[c], "com") == 0) {
                         tAsm.default_start_address = 0x0100;
                     } else {
-                        fprintf(stderr, "Error: only 'bin', 'com' supported for -f (it is '%s')\n", argv[c]);
-                        exit(1);
+                        fprintf(stderr, "ERR: only 'bin', 'com' supported for -f (it is '%s')\n", argv[c]);
+                        usage(1);
                     }
                     c++;
                 }
             } else if (d == 'o') {  /* Object file name */
                 c++;
                 if (c >= argc) {
-                    fprintf(stderr, "Error: no argument for -o\n");
-                    exit(1);
+                    fprintf(stderr, "ERR: no argument for -o\n");
+                    usage(1);
                 } else if (tAsm.output_filename != NULL) {
-                    fprintf(stderr, "Error: already a -o argument is present\n");
-                    exit(1);
+                    fprintf(stderr, "ERR: already a -o argument is present\n");
+                    usage(1);
                 } else {
                     tAsm.output_filename = argv[c];
                     c++;
@@ -1704,11 +1717,11 @@ int main(int argc, char *argv[])
             } else if (d == 'l') {  /* Listing file name */
                 c++;
                 if (c >= argc) {
-                    fprintf(stderr, "Error: no argument for -l\n");
-                    exit(1);
+                    fprintf(stderr, "ERR: no argument for -l\n");
+                    usage(1);
                 } else if (tAsm.listing_filename != NULL) {
-                    fprintf(stderr, "Error: already a -l argument is present\n");
-                    exit(1);
+                    fprintf(stderr, "ERR: already a -l argument is present\n");
+                    usage(1);
                 } else {
                     tAsm.listing_filename = argv[c];
                     c++;
@@ -1724,24 +1737,24 @@ int main(int argc, char *argv[])
                     undefined = 0;
                     p = match_expression(p, &tAsm.instruction_value);
                     if (p == NULL) {
-                        fprintf(stderr, "Error: wrong label definition\n");
-                        exit(1);
+                        fprintf(stderr, "ERR: wrong label definition\n");
+                        usage(1);
                     } else if (undefined) {
-                        fprintf(stderr, "Error: non-constant label definition\n");
-                        exit(1);
+                        fprintf(stderr, "ERR: non-constant label definition\n");
+                        usage(1);
                     } else {
                         define_label(argv[c] + 2, tAsm.instruction_value);
                     }
                 }
                 c++;
             } else {
-                fprintf(stderr, "Error: unknown argument %s\n", argv[c]);
-                exit(1);
+                fprintf(stderr, "ERR: unknown argument %s\n", argv[c]);
+                usage(1);
             }
         } else {
             if (ifname != NULL) {
-                fprintf(stderr, "Error: more than one input file name: %s\n", argv[c]);
-                exit(1);
+                fprintf(stderr, "ERR: more than one input file name: %s\n", argv[c]);
+                usage(1);
             } else {
                 ifname = argv[c];
             }
@@ -1750,8 +1763,8 @@ int main(int argc, char *argv[])
     }
 
     if (ifname == NULL) {
-        fprintf(stderr, "No input filename provided\n");
-        exit(1);
+        fprintf(stderr, "ERR: No input filename provided\n");
+        usage(1);
     }
 
     /*
@@ -1766,8 +1779,8 @@ int main(int argc, char *argv[])
          ** Do second step of assembly and generate final output
          */
         if (tAsm.output_filename == NULL) {
-            fprintf(stderr, "No output filename provided\n");
-            exit(1);
+            fprintf(stderr, "ERR: No output filename provided\n");
+            usage(1);
         }
         tAsm.change_number = 0;
         do {
@@ -1775,14 +1788,14 @@ int main(int argc, char *argv[])
             if (tAsm.listing_filename != NULL) {
                 tAsm.listing = fopen(tAsm.listing_filename, "w");
                 if (tAsm.listing == NULL) {
-                    fprintf(stderr, "Error: couldn't open '%s' as listing file\n", tAsm.output_filename);
-                    exit(1);
+                    fprintf(stderr, "ERR: couldn't open '%s' as listing file\n", tAsm.output_filename);
+                    usage(1);
                 }
             }
             tAsm.output = fopen(tAsm.output_filename, "wb");
             if (tAsm.output == NULL) {
-                fprintf(stderr, "Error: couldn't open '%s' as output file\n", tAsm.output_filename);
-                exit(1);
+                fprintf(stderr, "ERR: couldn't open '%s' as output file\n", tAsm.output_filename);
+                usage(1);
             }
             tAsm.assembler_step = 2;
             tAsm.first_time = 1;
@@ -1811,6 +1824,7 @@ int main(int argc, char *argv[])
                 remove(tAsm.output_filename);
                 if (tAsm.listing_filename != NULL)
                     remove(tAsm.listing_filename);
+                fprintf(stderr, "Error: Assembler change errors=%d\n", tAsm.errors);
                 exit(1);
             }
         } while (tAsm.change) ;
@@ -1818,6 +1832,7 @@ int main(int argc, char *argv[])
         exit(0);
     }
 
+    fprintf(stderr, "Error: Assembler exit errors=%d\n", tAsm.errors);
     exit(1);
 }
 /* vim: set tabstop=4 softtabstop=4 expandtab shiftwidth=4 autoindent: */
