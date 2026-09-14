@@ -16,6 +16,7 @@ CFLAGS 	+=	-Wmissing-prototypes
 CFLAGS 	+=	-Wstrict-prototypes
 CFLAGS 	+=	-Wmissing-declarations
 CFLAGS 	+=	-Wshadow
+CFLAGS 	+=	-Wwrite-strings
 CFLAGS 	+=	-O3
 CFLAGS 	+=	-g
 

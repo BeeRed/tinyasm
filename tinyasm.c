@@ -75,7 +75,7 @@ int undefined;
 
 extern char *instruction_set[];
 
-char *reg1[16] = {
+const char *reg1[16] = {
     "AL",
     "CL",
     "DL",
@@ -96,7 +96,7 @@ char *reg1[16] = {
 
 /* function prototypes */
 
-void message(int error, char *message);
+void message(int error, const char *message);
 char *match_addressing       (char *p, int width);
 char *match_register         (char *p, int width, int *value);
 char *match_expression       (char *p, int *value);
@@ -1135,7 +1135,7 @@ void check_end(char *p)
 /*
  ** Generate a message
  */
-void message(int error, char *message)
+void message(int error, const char *message)
 {
     if (error) {
         fprintf(stderr, "Error: %s at line %d\n", message, tAsm.line_number);
