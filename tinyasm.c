@@ -1745,6 +1745,8 @@ int main(int argc, char *argv[])
                     } else {
                         define_label(argv[c] + 2, tAsm.instruction_value);
                     }
+                } else {
+                    define_label(argv[c] + 2, 1);   /* assigne value 1 to label without = */
                 }
                 c++;
             } else {
