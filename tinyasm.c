@@ -15,6 +15,8 @@
 
 #define MAX_SIZE        256
 
+typedef unsigned char   byte_t;
+
 /* struct hold global vars to avoid shadow with func local vars see: -Wshadow */
 struct _tinyasm_s {
     char    *input_filename;
@@ -35,8 +37,8 @@ struct _tinyasm_s {
     char    *prev_p;
 
     char    *p;
-    char    *g;
-    char    generated[8];
+    byte_t  *g;
+    byte_t  generated[8];
 
     int     assembler_step;
     int     default_start_address;
@@ -113,7 +115,7 @@ void    sort_labels(struct label *node);
 char    *avoid_spaces(char *p);
 int     islabel(int c);
 char    *read_character(char *p, int *c);
-void    emit_byte(int byte);
+void    emit_byte(byte_t byte);
 char    *match(char *p, char *pattern, char *decode);
 void    to_lowercase(char *p);
 void    separate(void);
@@ -690,7 +692,7 @@ char *match_expression_level6(char *p, int *value)
         p += 2;
         number = 0;
         while (isxdigit(p[0])) {
-            c = toupper(p[0]);
+            c = (char)toupper(p[0]);
             c = c - '0';
             if (c > 9)
                 c -= 7;
@@ -706,7 +708,7 @@ char *match_expression_level6(char *p, int *value)
         p += 1;
         number = 0;
         while (isxdigit(p[0])) {
-            c = toupper(p[0]);
+            c = (char)toupper(p[0]);
             c = c - '0';
             if (c > 9)
                 c -= 7;
@@ -777,9 +779,9 @@ char *match_expression_level6(char *p, int *value)
 /*
  ** Emit one byte to output
  */
-void emit_byte(int byte)
+void emit_byte(byte_t byte)
 {
-    char buf[1];
+    byte_t buf[1];
 
     if (tAsm.assembler_step == 2) {
         if (tAsm.g != NULL && tAsm.g < tAsm.generated + sizeof(tAsm.generated))
@@ -964,7 +966,7 @@ char *match(char *p, char *pattern, char *decode)
             }
             continue;
         }
-        if (toupper(*p) != *pattern)
+        if ((char)toupper(*p) != *pattern)
             return NULL;
         p++;
         if (*pattern == ',')    /* Allow spaces after comma */
@@ -979,16 +981,16 @@ char *match(char *p, char *pattern, char *decode)
     while (*decode) {
         decode = avoid_spaces(decode);
         if (decode[0] == 'x') { /* Byte */
-            c = toupper(decode[1]);
+            c = (char)toupper(decode[1]);
             c -= '0';
             if (c > 9)
                 c -= 7;
-            d = toupper(decode[2]);
+            d = (char)toupper(decode[2]);
             d -= '0';
             if (d > 9)
                 d -= 7;
             c = (c << 4) | d;
-            emit_byte(c);
+            emit_byte((byte_t)c);
             decode += 3;
         } else {    /* Binary */
             if (*decode == 'b')
@@ -1057,7 +1059,7 @@ char *match(char *p, char *pattern, char *decode)
                         }
                     } else if (decode[0] == 'f') {
                         decode += 3;
-                        emit_byte(tAsm.instruction_value);
+                        emit_byte((byte_t)tAsm.instruction_value);
                         c = tAsm.instruction_value >> 8;
                         tAsm.instruction_offset = tAsm.instruction_value2;
                         tAsm.instruction_offset_width = 2;
@@ -1071,14 +1073,14 @@ char *match(char *p, char *pattern, char *decode)
                     break;
                 }
             }
-            emit_byte(c);
+            emit_byte((byte_t)c);
             if (d == 1) {
                 d = 0;
                 if (tAsm.instruction_offset_width >= 1) {
-                    emit_byte(tAsm.instruction_offset);
+                    emit_byte((byte_t)tAsm.instruction_offset);
                 }
                 if (tAsm.instruction_offset_width >= 2) {
-                    emit_byte(tAsm.instruction_offset >> 8);
+                    emit_byte((byte_t)(tAsm.instruction_offset >> 8));
                 }
             }
         }
@@ -1097,7 +1099,7 @@ char *match(char *p, char *pattern, char *decode)
 void to_lowercase(char *p)
 {
     while (*p) {
-        *p = tolower(*p);
+        *p = (char)tolower(*p);
         p++;
     }
 }
@@ -1114,7 +1116,7 @@ void separate(void)
     tAsm.prev_p = tAsm.p;
     p2 = tAsm.part;
     while (*tAsm.p && !isspace(*tAsm.p) && *tAsm.p != ';')
-        *p2++ = *tAsm.p++;
+        *p2++ = (char)(*tAsm.p++);
     *p2 = '\0';
     while (*tAsm.p && isspace(*tAsm.p))
         tAsm.p++;
@@ -1169,7 +1171,7 @@ void process_instruction(void)
                 tAsm.p++;
                 while (*tAsm.p && *tAsm.p != '"') {
                     tAsm.p = read_character(tAsm.p, &c);
-                    emit_byte(c);
+                    emit_byte((byte_t)c);
                 }
                 if (*tAsm.p) {
                     tAsm.p++;
@@ -1186,7 +1188,7 @@ void process_instruction(void)
                     fprintf(stderr, "Error: undefined label '%s' at line %d\n", tAsm.undefined_name, tAsm.line_number);
                     break;
                 }
-                emit_byte(tAsm.instruction_value);
+                emit_byte((byte_t)tAsm.instruction_value);
                 tAsm.p = p2;
             }
             tAsm.p = avoid_spaces(tAsm.p);
@@ -1210,8 +1212,8 @@ void process_instruction(void)
                 fprintf(stderr, "Error: undefined label '%s' at line %d\n", tAsm.undefined_name, tAsm.line_number);
                 break;
             }
-            emit_byte(tAsm.instruction_value);
-            emit_byte(tAsm.instruction_value >> 8);
+            emit_byte((byte_t)(tAsm.instruction_value));
+            emit_byte((byte_t)(tAsm.instruction_value >> 8));
             tAsm.p = avoid_spaces(p2);
             if (*tAsm.p == ',') {
                 tAsm.p++;
@@ -1268,8 +1270,8 @@ void incbin(char *fname)
 {
     FILE *input;
     char buf[256];
-    int size;
-    int i;
+    size_t size;
+    size_t i;
 
     input = fopen(fname, "rb");
     if (input == NULL) {
@@ -1280,7 +1282,7 @@ void incbin(char *fname)
 
     while ((size = fread(buf, 1, sizeof(buf), input)) != 0) {
         for (i = 0; i < size; i++) {
-            emit_byte(buf[i]);
+            emit_byte((byte_t)buf[i]);
         }
     }
 
@@ -1336,7 +1338,7 @@ void do_assembly(char *fname)
                     tAsm.p++;
                 break;
             }
-            *tAsm.p = toupper(*tAsm.p);
+            *tAsm.p = (char)toupper(*tAsm.p);
             tAsm.p++;
         }
         if (tAsm.p > tAsm.line && *(tAsm.p - 1) == '\n')
@@ -1551,7 +1553,7 @@ void do_assembly(char *fname)
                             message(1, "Backward address");
                         } else {
                             while (tAsm.address < tAsm.instruction_value)
-                                emit_byte(0);
+                                emit_byte((byte_t)0);
 
                         }
                     }
@@ -1572,7 +1574,7 @@ void do_assembly(char *fname)
                     align = align * tAsm.instruction_value;
                     align = align + tAsm.instruction_value;
                     while (tAsm.address < align)
-                        emit_byte(0x90);
+                        emit_byte((byte_t)0x90);
                     check_end(p2);
                 }
                 break;
@@ -1616,11 +1618,11 @@ void do_assembly(char *fname)
                 fprintf(tAsm.listing, "      ");
             else
                 fprintf(tAsm.listing, "%04X  ", base);
-            tAsm.p = tAsm.generated;
-            while (tAsm.p < tAsm.g) {
+            tAsm.p = (char*)&tAsm.generated[0];
+            while ((byte_t*)tAsm.p < tAsm.g) {
                 fprintf(tAsm.listing, "%02X", *tAsm.p++ & 255);
             }
-            while (tAsm.p < tAsm.generated + sizeof(tAsm.generated)) {
+            while ((byte_t*)tAsm.p < &tAsm.generated[0] + sizeof(tAsm.generated)) {
                 fprintf(tAsm.listing, "  ");
                 tAsm.p++;
             }
@@ -1714,7 +1716,7 @@ int main(int argc, char *argv[])
             } else if (d == 'd') {  /* Define label */
                 p = argv[c] + 2;
                 while (*p && *p != '=') {
-                    *p = toupper(*p);
+                    *p = (char)toupper(*p);
                     p++;
                 }
                 if (*p == '=') {
