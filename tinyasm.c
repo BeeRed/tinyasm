@@ -64,15 +64,16 @@ struct _tinyasm_s {
 typedef struct _tinyasm_s tinyasm_t;
 tinyasm_t   tAsm;
 
-struct label {
-    struct label *left;
-    struct label *right;
-    int value;
-    char name[1];
+typedef struct _label_s     label_t;
+struct _label_s {
+    label_t     *left;
+    label_t     *right;
+    int         value;
+    char        name[1];
 };
 
-struct label *label_list;
-struct label *last_label;
+label_t *label_list;
+label_t *last_label;
 int undefined;
 
 extern char *instruction_set[];
@@ -109,9 +110,9 @@ char *match_expression_level4(char *p, int *value);
 char *match_expression_level5(char *p, int *value);
 char *match_expression_level6(char *p, int *value);
 
-struct label    *define_label(char *name, int value);
-struct label    *find_label(char *name);
-void    sort_labels(struct label *node);
+label_t    *define_label(char *name, int value);
+label_t    *find_label(char *name);
+void    sort_labels(label_t *node);
 char    *avoid_spaces(char *p);
 int     islabel(int c);
 char    *read_character(char *p, int *c);
@@ -135,14 +136,14 @@ void    usage(int err);
 /*
  ** Define a new label
  */
-struct label *define_label(char *name, int value)
+label_t *define_label(char *name, int value)
 {
-    struct label *label;
-    struct label *explore;
+    label_t *label;
+    label_t *explore;
     int c;
 
     /* Allocate label */
-    label = malloc(sizeof(struct label) + strlen(name));
+    label = calloc(1, sizeof(*label) + strlen(name)+1);
     if (label == NULL) {
         fprintf(stderr, "Out of memory for label\n");
         exit(1);
@@ -150,7 +151,7 @@ struct label *define_label(char *name, int value)
     }
 
     /* Fill label */
-    label->left = NULL;
+    label->left  = NULL;
     label->right = NULL;
     label->value = value;
     strcpy(label->name, name);
@@ -183,9 +184,9 @@ struct label *define_label(char *name, int value)
 /*
  ** Find a label
  */
-struct label *find_label(char *name)
+label_t *find_label(char *name)
 {
-    struct label *explore;
+    label_t *explore;
     int c;
 
     /* Follows a binary tree */
@@ -205,7 +206,7 @@ struct label *find_label(char *name)
 /*
  ** Sort recursively labels (already done by binary tree)
  */
-void sort_labels(struct label *node)
+void sort_labels(label_t *node)
 {
     if (node->left != NULL)
         sort_labels(node->left);
@@ -646,7 +647,7 @@ char *match_expression_level6(char *p, int *value)
     int number;
     int c;
     char *p2;
-    struct label *label;
+    label_t *label;
 
     p = avoid_spaces(p);
     if (*p == '(') {    /* Handle parenthesized expressions */
