@@ -51,6 +51,7 @@ struct _tinyasm_s {
     int     bytes;
     int     change;
     int     change_number;
+    int     verbose;
 
     int     instruction_addressing;
     int     instruction_offset;
@@ -139,6 +140,31 @@ void    usage(int err);
 #define exit(status)    _exit(status)
 #endif
 
+#ifndef DEBUG
+#define dump_label(l)   /* do nothing */
+#else
+void crash(void);
+void crash(void)
+{
+    *(unsigned int*)0 = 0xdeadbeef;
+}
+void dump_label(label_t *label);
+void dump_label(label_t *label)
+{
+    if(tAsm.verbose < 2) {
+        return;
+    }
+    if(NULL==label) {
+        fprintf(stderr, "ERR: label = NULL\n");
+        return;
+    }
+    fprintf(stderr, "#DLABEL:");
+        fprintf(stderr, "%p\tL:%p\tR:%p\t",
+                (void*)label, (void*)label->left, (void*)label->right);
+    fprintf(stderr, "%-20s %04x\n", label->name, label->value);
+}
+#endif
+
 /*
  ** Define a new label
  */
@@ -185,6 +211,7 @@ label_t *define_label(char *name, int value)
             }
         }
     }
+    dump_label(label);
     return label;
 }
 
@@ -1331,6 +1358,12 @@ void do_assembly(char *fname)
     tAsm.line_number = 0;
     base = 0;
     while (fgets(tAsm.line, sizeof(tAsm.line), input)) {
+#ifdef DEBUG
+        if(tAsm.verbose > 2) {
+            size_t line_len    = strlen(tAsm.line);
+            fprintf(stderr, "#DLINE[%2lu]%s", line_len, tAsm.line);
+        }
+#endif
         tAsm.line_number++;
         tAsm.p = tAsm.line;
         while (*tAsm.p) {
@@ -1590,7 +1623,10 @@ void do_assembly(char *fname)
             }
             if (tAsm.first_time == 1) {
 #ifdef DEBUG
-                fprintf(stderr, "First time '%s' at line %d\n", tAsm.line, tAsm.line_number);
+                if(tAsm.verbose > 2) {
+                    fprintf(stderr, "XXX First time '%lu'", strlen(tAsm.line));
+                    fprintf(stderr, "First time '%s' at Xline %d\n", tAsm.line, tAsm.line_number);
+                }
 #endif
                 tAsm.first_time = 0;
                 reset_address();
@@ -1654,11 +1690,12 @@ void do_assembly(char *fname)
 void usage(int err)
 {
     fprintf(stderr, "\nTypical usage:\n");
-    fprintf(stderr, "tinyasm [-f bin] [-l listfile] [-dlabel=123] -o input.bin input.asm\n");
+    fprintf(stderr, "tinyasm  [-v] [-f bin] [-l listfile] [-dlabel=123] -o input.bin input.asm\n");
     fprintf(stderr, "\t -f format\tdefault=bin, com\tstartaddr: bin=0x0, com=0x100\n");
     fprintf(stderr, "\t -o outfile\toutput  filename\n");
     fprintf(stderr, "\t -l listfile\tlisting filename\n");
     fprintf(stderr, "\t -dLABEL=value\tdefine a label(converted to uppercase) with value\n");
+    fprintf(stderr, "\t -v\tincrement verbose level default=0\n");
     if(err) {
         exit(err);
     }
@@ -1693,7 +1730,10 @@ int main(int argc, char *argv[])
     while (c < argc) {
         if (argv[c][0] == '-') {    /* All arguments start with dash */
             d = tolower(argv[c][1]);
-            if (d == 'f') { /* Format */
+            if (d == 'v') { /* verbose */
+                c++;
+                tAsm.verbose++;
+            } else if (d == 'f') { /* Format */
                 c++;
                 if (c >= argc) {
                     fprintf(stderr, "Error: no argument for -f\n");
@@ -1770,6 +1810,9 @@ int main(int argc, char *argv[])
             }
             c++;
         }
+    }
+    if(tAsm.verbose>0) {
+        fprintf(stderr, "verbose = %d\n", tAsm.verbose);
     }
 
     if (ifname == NULL) {
