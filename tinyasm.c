@@ -141,12 +141,24 @@ void    usage(int err);
 #endif
 
 #ifndef DEBUG
+#define crash()         /* do nothing */
 #define dump_label(l)   /* do nothing */
 #else
 void crash(void);
 void crash(void)
 {
     *(unsigned int*)0 = 0xdeadbeef;
+}
+void pargs(int argc, char *argv[]);
+void pargs(int argc, char *argv[])
+{
+    int i;
+
+    fprintf(stderr, "PRG[%d] %s", argc, argv[0]);
+    for(i=1; i<argc; i++) {
+        fprintf(stderr, " A:%d<%s>", i, argv[i]);
+    }
+    fprintf(stderr, "\n");
 }
 void dump_label(label_t *label);
 void dump_label(label_t *label)
@@ -1711,6 +1723,9 @@ int main(int argc, char *argv[])
     char *p;
     char *ifname;
 
+#ifdef DEBUG
+    pargs( argc, argv);
+#endif
     /*
      ** If ran without arguments then show usage
      */
@@ -1875,9 +1890,15 @@ int main(int argc, char *argv[])
                 }
             }
             if (tAsm.errors) {
-                remove(tAsm.output_filename);
-                if (tAsm.listing_filename != NULL)
-                    remove(tAsm.listing_filename);
+                char  ren_buf[MAX_SIZE];
+                strcpy(ren_buf, tAsm.output_filename);
+                strcat(ren_buf, "-bad");
+                rename(tAsm.output_filename, ren_buf);
+                if (tAsm.listing_filename != NULL){
+                    strcpy(ren_buf, tAsm.listing_filename);
+                    strcat(ren_buf, "-bad");
+                    rename(tAsm.listing_filename, ren_buf);
+                }
                 fprintf(stderr, "Error: Assembler change errors=%d\n", tAsm.errors);
                 exit(1);
             }
