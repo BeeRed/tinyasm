@@ -1,12 +1,12 @@
                         00001         ;
-                        00002         ; HELLOWORLD WITH %INCLUDE TEST PROGRAMM
+                        00002         ; HelloWorld with %include test programm
                         00003         ;
-                        00004         ; BY DOSWORLD
-                        00005         ; HTTPS://GITHUB.COM/DOSWORLD/
+                        00004         ; by DosWorld
+                        00005         ; https://github.com/DosWorld/
                         00006         ;
-                        00007         ; (C) COPYRIGHT 2019 DOSWORLD
+                        00007         ; (c) Copyright 2019 DosWorld
                         00008         ;
-                        00009         ; CREATION DATE: NOV/03/2019. 5AM.
+                        00009         ; Creation date: Nov/03/2019. 5am.
                         00010         ;
                         00011 
 0100                    00012 	ORG 0X0100
