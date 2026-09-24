@@ -1,0 +1,576 @@
+                        00001         ;
+                        00002         ; bootRogue game in 512 bytes (boot sector)
+                        00003         ;
+                        00004         ; by Oscar Toledo G.
+                        00005         ; http://nanochess.org/
+                        00006         ;
+                        00007         ; (c) Copyright 2019 Oscar Toledo G.
+                        00008         ;
+                        00009         ; Creation date: Sep/19/2019. Generates room boxes.
+                        00010         ; Revision date: Sep/20/2019. Connect rooms. Allows to navigate.
+                        00011         ; Revision date: Sep/21/2019. Added ladders to go down/up. Shows
+                        00012         ;                             Amulet of Yendor at level 26. Added
+                        00013         ;                             circle of light.
+                        00014         ; Revision date: Sep/22/2019. Creates monsters and items. Now has
+                        00015         ;                             hp/exp. Food, armor, weapon, and traps
+                        00016         ;                             works. Added battles. 829 bytes.
+                        00017         ; Revision date: Sep/23/2019. Lots of optimization. 643 bytes.
+                        00018         ; Revision date: Sep/24/2019. Again lots of optimization. 596 bytes.
+                        00019         ; Revision date: Sep/25/2019. Many optimizations. 553 bytes.
+                        00020         ; Revision date: Sep/26/2019. The final effort. 510 bytes.
+                        00021         ; Revision date: Sep/27/2019. The COM file exits to DOS instead of halting.
+                        00022         ;
+                        00023 
+                        00024         CPU 8086
+                        00025 
+                        00026 ROW_WIDTH:      EQU 0X00A0      ; Width in bytes of each video row
+                        00027 BOX_MAX_WIDTH:  EQU 23          ; Max width of a room box
+                        00028 BOX_MAX_HEIGHT: EQU 6           ; Max height of a room box
+                        00029 BOX_WIDTH:      EQU 26          ; Width of box area in screen
+                        00030 BOX_HEIGHT:     EQU 8           ; Height of box area in screen
+                        00031 
+                        00032         ; See page 45 of my book
+                        00033 LIGHT_COLOR:    EQU 0X06        ; Light color (brown, dark yellow on emu)        
+                        00034 HERO_COLOR:     EQU 0X0E        ; Hero color (yellow)
+                        00035 
+                        00036         ; See page 179 of my book
+                        00037 GR_VERT:        EQU 0XBA        ; Vertical line graphic
+                        00038 GR_TOP_RIGHT:   EQU 0XBB        ; Top right graphic
+                        00039 GR_BOT_RIGHT:   EQU 0XBC        ; Bottom right graphic
+                        00040 GR_BOT_LEFT:    EQU 0XC8        ; Bottom left graphic
+                        00041 GR_TOP_LEFT:    EQU 0XC9        ; Top left graphic
+                        00042 GR_HORIZ:       EQU 0XCD        ; Horizontal line graphic
+                        00043 
+                        00044 GR_TUNNEL:      EQU 0XB1        ; Tunnel graphic (shaded block)
+                        00045 GR_DOOR:        EQU 0XCE        ; Door graphic (crosshair graphic)
+                        00046 GR_FLOOR:       EQU 0XFA        ; Floor graphic (middle point)
+                        00047 
+                        00048 GR_HERO:        EQU 0X01        ; Hero graphic (smiling face)
+                        00049 
+                        00050 GR_LADDER:      EQU 0XF0        ; Ladder graphic 
+                        00051 GR_TRAP:        EQU 0X04        ; Trap graphic (diamond)
+                        00052 GR_FOOD:        EQU 0X05        ; Food graphic (clover)
+                        00053 GR_ARMOR:       EQU 0X08        ; Armor graphic (square with hole in center)
+                        00054 GR_YENDOR:      EQU 0X0C        ; Amulet of Yendor graphic (Female sign)
+                        00055 GR_GOLD:        EQU 0X0F        ; Gold graphic (asterisk, like brightness)
+                        00056 GR_WEAPON:      EQU 0X18        ; Weapon graphic (up arrow)
+                        00057 
+                        00058 YENDOR_LEVEL:   EQU 26          ; Level of appearance for Amulet of Yendor
+                        00059 
+                        00060     %IFDEF COM_FILE
+0100                    00061         ORG 0X0100
+0100                    00062     %ELSE
+0100                    00063         ORG 0X7C00
+0100                    00064     %ENDIF
+0100                    00065 
+0100                    00066         ;
+0100                    00067         ; Sorted by order of PUSH instructions
+0100                    00068         ;
+0100                    00069 RND:    EQU 0X0006      ; Random seed
+0100                    00070 HP:     EQU 0X0004      ; Current HP
+0100                    00071 LEVEL:  EQU 0X0003      ; Current level (starting at 0x01)
+0100                    00072 YENDOR: EQU 0X0002      ; 0x01 = Not found. 0xff = Found.
+0100                    00073 ARMOR:  EQU 0X0001      ; Armor level
+0100                    00074 WEAPON: EQU 0X0000      ; Weapon level
+0100                    00075 
+0100                    00076         ;
+0100                    00077         ; Start of the adventure!
+0100                    00078         ;
+0100                    00079 START:
+0100  E540              00080         IN AX,0X40      ; Read timer counter
+0102  50                00081         PUSH AX         ; Setup pseudorandom number generator
+0103                    00082 
+0103  B81000            00083         MOV AX,16
+0106  50                00084         PUSH AX         ; hp
+0107  B001              00085         MOV AL,1
+0109  50                00086         PUSH AX         ; yendor (low byte) + level (high byte)
+010A  50                00087         PUSH AX         ; weapon (low byte) + armor (high byte)
+010B  40                00088         INC AX          ; ax = 0x0002 (it was 0x0001)
+010C  CD10              00089         INT 0X10
+010E  B800B8            00090         MOV AX,0XB800   ; Text video segment
+0111  8ED8              00091         MOV DS,AX
+0113  8EC0              00092         MOV ES,AX
+0115                    00093 
+0115  89E5              00094         MOV BP,SP
+0117                    00095 GENERATE_DUNGEON:
+0117                    00096         ;
+0117                    00097         ; Advance to next level (can go deeper or higher)
+0117                    00098         ;
+0117  8A5E02            00099         MOV BL,[BP+YENDOR]
+011A  005E03            00100         ADD [BP+LEVEL],BL
+011D                    00101     %IFDEF COM_FILE
+011D  7503              00102         JNE .0
+011F  E91801            00103         JMP QUIT        ; Stop if level zero is reached
+0122                    00104 .0:
+0122                    00105     %ELSE
+0122                    00106         JE $            ; Stop if level zero is reached
+0122                    00107     %ENDIF
+0122                    00108 
+0122                    00109         ;
+0122                    00110         ; Select a maze for the dungeon
+0122                    00111         ;
+0122                    00112         ; There are many combinations of values that generate at least
+0122                    00113         ; 16 mazes in order to avoid a table.
+0122                    00114         ;
+0122  8B4606            00115         MOV AX,[BP+RND]        
+0125  258241            00116         AND AX,0X4182
+0128  0D6D1A            00117         OR AX,0X1A6D
+012B  96                00118         XCHG AX,SI
+012C                    00119 
+012C                    00120         ;
+012C                    00121         ; Clean the screen
+012C                    00122         ;
+012C  31C0              00123         XOR AX,AX
+012E  31FF              00124         XOR DI,DI
+0130  B508              00125         MOV CH,0X08
+0132  F3AB              00126         REP STOSW
+0134                    00127 
+0134                    00128         ;
+0134                    00129         ; Draw the nine rooms
+0134                    00130         ;
+0134  B85601            00131         MOV AX,(BOX_HEIGHT/2-2)*ROW_WIDTH+(BOX_WIDTH/2-2)*2
+0137                    00132 .7:
+0137  50                00133         PUSH AX
+0138  50                00134         PUSH AX
+0139  05A400            00135         ADD AX,ROW_WIDTH+4      ; Get the center of room
+013C  97                00136         XCHG AX,DI                                              
+013D  D1EE              00137         SHR SI,1                ; Obtain bit of right connection
+013F  B8B100            00138         MOV AX,0X0000+GR_TUNNEL
+0142  B91A00            00139         MOV CX,BOX_WIDTH
+0145  7304              00140         JNC .3
+0147  57                00141         PUSH DI
+0148  F3AB              00142         REP STOSW               ; Horizontal tunnel
+014A  5F                00143         POP DI
+014B                    00144 .3:
+014B  D1EE              00145         SHR SI,1                ; Obtain bit of down connection
+014D  7309              00146         JNC .5
+014F  B108              00147         MOV CL,BOX_HEIGHT
+0151                    00148 .4:
+0151  AA                00149         STOSB                   ; Vertical tunnel
+0152  81C79F00          00150         ADD DI,ROW_WIDTH-1
+0156  E2F9              00151         LOOP .4
+0158                    00152 .5:     
+0158  B715              00153         MOV BH,BOX_MAX_WIDTH-2  
+015A  E89001            00154         CALL RANDOM             ; Get a random width for room.
+015D  91                00155         XCHG AX,CX
+015E  B704              00156         MOV BH,BOX_MAX_HEIGHT-2
+0160  E88A01            00157         CALL RANDOM             ; Get a random height for room.
+0163  88C5              00158         MOV CH,AL
+0165  24FE              00159         AND AL,0XFE             ; It needs a/2*2 so this does it.
+0167  B450              00160         MOV AH,ROW_WIDTH/2
+0169  F6E4              00161         MUL AH
+016B  01C8              00162         ADD AX,CX               ; Now it has a centering offset
+016D  28EC              00163         SUB AH,CH               ; Better than "mov bx,cx mov bh,0"
+016F  24FE              00164         AND AL,0XFE
+0171  5F                00165         POP DI
+0172  29C7              00166         SUB DI,AX               ; Subtract from room center
+0174  B0C9              00167         MOV AL,GR_TOP_LEFT      ; Draw top row of room
+0176  BBCDBB            00168         MOV BX,GR_TOP_RIGHT*256+GR_HORIZ
+0179  E81E01            00169         CALL FILL
+017C                    00170 .9:
+017C  B0BA              00171         MOV AL,GR_VERT          ; Draw intermediate row of room
+017E  BBFABA            00172         MOV BX,GR_VERT*256+GR_FLOOR     
+0181  E81601            00173         CALL FILL
+0184  FECD              00174         DEC CH
+0186  79F4              00175         JNS .9
+0188  B0C8              00176         MOV AL,GR_BOT_LEFT      ; Draw bottom row of room
+018A  BBCDBC            00177         MOV BX,GR_BOT_RIGHT*256+GR_HORIZ
+018D  E80A01            00178         CALL FILL
+0190  58                00179         POP AX
+0191  053400            00180         ADD AX,BOX_WIDTH*2
+0194  3CF2              00181         CMP AL,0XF2             ; Finished drawing three rooms?
+0196  7503              00182         JNE .6                  ; No, jump
+0198                    00183                                 ; Yes, go to following row
+0198  056404            00184         ADD AX,ROW_WIDTH*BOX_HEIGHT-BOX_WIDTH*3*2
+019B                    00185 .6:
+019B  3D000F            00186         CMP AX,ROW_WIDTH*BOX_HEIGHT*3
+019E  7297              00187         JB .7
+01A0                    00188 
+01A0                    00189         ;
+01A0                    00190         ; Put the ladder at a random corner room
+01A0                    00191         ;
+01A0  D16606            00192         SHL WORD [BP+RND],1
+01A3  B8F801            00193         MOV AX,3*ROW_WIDTH+12*2       
+01A6  BBF80B            00194         MOV BX,19*ROW_WIDTH+12*2        
+01A9  7301              00195         JNC .2
+01AB  93                00196         XCHG AX,BX
+01AC  7903              00197 .2:     JNS .8
+01AE  056800            00198         ADD AX,BOX_WIDTH*2*2
+01B1                    00199 .8:
+01B1  97                00200         XCHG AX,DI
+01B2                    00201 
+01B2  C605F0            00202         MOV BYTE [DI],GR_LADDER
+01B5                    00203 
+01B5                    00204         ;
+01B5                    00205         ; If a deep level has been reached then put the Amulet of Yendor
+01B5                    00206         ;
+01B5  807E031A          00207         CMP BYTE [BP+LEVEL],YENDOR_LEVEL
+01B9  7203              00208         JB .1
+01BB  C6070C            00209         MOV BYTE [BX],GR_YENDOR
+01BE                    00210 .1:
+01BE                    00211         ;
+01BE                    00212         ; Setup hero start
+01BE                    00213         ;
+01BE  BF2C07            00214         MOV DI,11*ROW_WIDTH+38*2
+01C1                    00215         ;
+01C1                    00216         ; Main game loop
+01C1                    00217         ;
+01C1                    00218 GAME_LOOP:
+01C1  B8C101            00219         MOV AX,GAME_LOOP        ; Force to repeat, the whole loop...
+01C4  50                00220         PUSH AX                 ; ...ends with ret.
+01C5                    00221 
+01C5                    00222         ;
+01C5                    00223         ; Circle of light around the player (3x3)
+01C5                    00224         ;
+01C5  BB0500            00225         MOV BX,0X0005                   ; BX values
+01C8  4B                00226 .1:     DEC BX
+01C9  4B                00227         DEC BX                          ; -1 1 3 -0x00a0
+01CA  B006              00228         MOV AL,LIGHT_COLOR     
+01CC  888160FF          00229         MOV [BX+DI-ROW_WIDTH],AL        ; -1(1)3 
+01D0  8801              00230         MOV [BX+DI],AL                      
+01D2  8881A000          00231         MOV [BX+DI+ROW_WIDTH],AL        ; -1 1 3 +0x00a0
+01D6  79F0              00232         JNS .1
+01D8                    00233 
+01D8                    00234         ;
+01D8                    00235         ; Show our hero
+01D8                    00236         ;
+01D8  FF35              00237         PUSH WORD [DI]          ; Save character under 
+01DA  C705010E          00238         MOV WORD [DI],HERO_COLOR*256+GR_HERO
+01DE  31C0              00239         XOR AX,AX
+01E0  E86E00            00240         CALL ADD_HP             ; Update stats
+01E3                    00241     ;   mov ah,0x00             ; Comes here with ah = 0
+01E3  CD16              00242         INT 0X16                ; Read keyboard
+01E5  8F05              00243         POP WORD [DI]           ; Restore character under 
+01E7                    00244 
+01E7  88E0              00245         MOV AL,AH
+01E9                    00246     %IFDEF COM_FILE
+01E9  3C01              00247         CMP AL,0X01
+01EB  744D              00248         JE QUIT                 ; Exit if Esc key is pressed
+01ED                    00249     %ENDIF
+01ED                    00250 
+01ED  2C4C              00251         SUB AL,0X4C
+01EF  B402              00252         MOV AH,0X02             ; Left/right multiplies by 2
+01F1  3CFF              00253         CMP AL,0XFF             ; Going left (scancode 0x4b)
+01F3  740E              00254         JE .2
+01F5  3C01              00255         CMP AL,0X01             ; Going right (scancode 0x4d)
+01F7  740A              00256         JE .2
+01F9  3CFC              00257         CMP AL,0XFC             ; Going up (scancode 0x48)
+01FB  7404              00258         JE .3
+01FD  3C04              00259         CMP AL,0X04             ; Going down (scancode 0x50)
+01FF  7538              00260         JNE MOVE_CANCEL
+0201                    00261 .3:
+0201  B428              00262         MOV AH,0X28             ; Up/down multiplies by 40
+0203                    00263 .2:
+0203  F6EC              00264         IMUL AH                 ; Signed multiplication
+0205                    00265 
+0205  93                00266         XCHG AX,BX              ; bx = displacement offset
+0206  8A01              00267         MOV AL,[DI+BX]          ; Read the target contents
+0208  3CF0              00268         CMP AL,GR_LADDER        ; GR_LADDER?
+020A  7430              00269         JE LADDER_FOUND         ; Yes, jump to next level
+020C  7729              00270         JA MOVE_OVER            ; > it must be GR_FLOOR
+020E  3CCE              00271         CMP AL,GR_DOOR          ; GR_DOOR?
+0210  7425              00272         JE MOVE_OVER            ; Yes, can move
+0212  3CB1              00273         CMP AL,GR_TUNNEL        ; GR_TUNNEL?
+0214  7421              00274         JE MOVE_OVER            ; Yes, can move
+0216  7721              00275         JA MOVE_CANCEL          ; > it must be border, cancel movement
+0218  3C04              00276         CMP AL,GR_TRAP          ; GR_TRAP?
+021A  721D              00277         JB MOVE_CANCEL          ; < it must be blank, cancel movement
+021C  8D39              00278         LEA DI,[DI+BX]          ; Do move.
+021E  742C              00279         JE TRAP_FOUND           ; = Yes, went over trap
+0220  3C18              00280         CMP AL,GR_WEAPON        ; GR_WEAPON?
+0222  774D              00281         JA BATTLE               ; > it's a monster, go to battle
+0224  C605FA            00282         MOV BYTE [DI],GR_FLOOR  ; Delete item from floor
+0227  741A              00283         JE WEAPON_FOUND         ; = weapon found
+0229  3C08              00284         CMP AL,GR_ARMOR         ; GR_ARMOR?
+022B  7412              00285         JE ARMOR_FOUND          ; Yes, increase armor
+022D  7218              00286         JB FOOD_FOUND           ; < it's GR_FOOD, increase hp
+022F  3C0F              00287         CMP AL,GR_GOLD          ; GR_GOLD?
+0231  7406              00288         JE MOVE_CANCEL          ; Yes, simply take it.
+0233                    00289         ; At this point 'al' only can be GR_YENDOR
+0233                    00290         ; Amulet of Yendor found!
+0233  F65E02            00291         NEG BYTE [BP+YENDOR]    ; Now player goes upwards over ladders.
+0236  C3                00292         RET
+0237                    00293 MOVE_OVER:        
+0237  8D39              00294         LEA DI,[BX+DI]          ; Do move.
+0239                    00295 MOVE_CANCEL:
+0239  C3                00296         RET                     ; Return to main loop.
+023A                    00297 
+023A                    00298     %IFDEF COM_FILE
+023A                    00299 QUIT:
+023A  CD20              00300         INT 0X20
+023C                    00301     %ENDIF
+023C                    00302 
+023C                    00303         ;
+023C                    00304         ;     I--
+023C                    00305         ;   I--
+023C                    00306         ; I--
+023C                    00307         ;
+023C                    00308 LADDER_FOUND:
+023C  E9D8FE            00309         JMP GENERATE_DUNGEON
+023F                    00310 
+023F                    00311         ; ______
+023F                    00312         ; I    I
+023F                    00313         ; I #X I
+023F                    00314         ; I X# I
+023F                    00315         ;  \__/
+023F                    00316         ;   
+023F                    00317 ARMOR_FOUND:
+023F  FE4601            00318         INC BYTE [BP+ARMOR]     ; Increase armor level
+0242  C3                00319         RET
+0243                    00320 
+0243                    00321         ;
+0243                    00322         ;       /| _____________
+0243                    00323         ; (|===|oo>_____________>
+0243                    00324         ;       \|
+0243                    00325         ;
+0243                    00326 WEAPON_FOUND:
+0243  FE4600            00327         INC BYTE [BP+WEAPON]    ; Increase weapon level
+0246  C3                00328         RET
+0247                    00329 
+0247                    00330         ;
+0247                    00331         ;     /--\
+0247                    00332         ; ====    I
+0247                    00333         ;     \--/
+0247                    00334         ;
+0247                    00335 FOOD_FOUND:
+0247  E8A100            00336         CALL RANDOM6            ; Random 1-6
+024A  EB05              00337         JMP SHORT ADD_HP
+024C                    00338 
+024C                    00339         ;
+024C                    00340         ; Aaaarghhhh!
+024C                    00341         ;
+024C                    00342 TRAP_FOUND:
+024C  E89C00            00343         CALL RANDOM6            ; Random 1-6
+024F  F7D8              00344 SUB_HP: NEG AX                  ; Make it negative
+0251  034604            00345 ADD_HP: ADD AX,[BP+HP]          ; Add to current HP
+0254                    00346     %IFDEF COM_FILE
+0254  78E4              00347         JS QUIT                 ; Exit if Esc key is pressed
+0256                    00348     %ELSE
+0256                    00349         JS $                    ; Stall if dead
+0256                    00350     %ENDIF
+0256  894604            00351         MOV [BP+HP],AX          ; Update HP.
+0259                    00352         ;
+0259                    00353         ; Update screen indicator
+0259                    00354         ;
+0259  BB980F            00355         MOV BX,0X0F98           ; Point to bottom right corner
+025C                    00356 .1:
+025C  99                00357         CWD                     ; Extend AX into DX
+025D  B90A00            00358         MOV CX,10                                               
+0260  F7F1              00359         DIV CX                  ; Divide by 10
+0262  81C2300A          00360         ADD DX,0X0A30           ; Add ASCII digit zero and color to remainder
+0266  8917              00361         MOV [BX],DX             ; Put on screen
+0268  4B                00362         DEC BX
+0269  4B                00363         DEC BX
+026A  09C0              00364         OR AX,AX                ; More digits available?
+026C  75EE              00365         JNZ .1                  ; Yes, jump
+026E  8907              00366         MOV [BX],AX             ; Erase character just in case number shrinks
+0270  C3                00367         RET
+0271                    00368 
+0271                    00369         ;
+0271                    00370         ; Let's battle!!!
+0271                    00371         ;
+0271                    00372 BATTLE:
+0271  241F              00373         AND AL,0X1F     ; Separate number of monster (1-26)     
+0273  98                00374         CBW             ; Extend to 16 bits
+0274  D0E0              00375         SHL AL,1        ; Make it slightly harder
+0276  88C3              00376         MOV BL,AL       ; Its attack is equivalent to its number
+0278  96                00377         XCHG AX,SI      ; Use also as its HP
+0279                    00378         ; Player's attack
+0279                    00379 .2:
+0279  8A7E00            00380         MOV BH,[BP+WEAPON]      ; Use current weapon level as dice
+027C  E86E00            00381         CALL RANDOM
+027F  29C6              00382         SUB SI,AX       ; Subtract from monster's HP
+0281  88DF              00383         MOV BH,BL
+0283  7211              00384         JC .3           ; Killed? yes, jump
+0285                    00385         ; Monster's attack
+0285  E86500            00386         CALL RANDOM     ; Use monster number as dice
+0288  2A4601            00387         SUB AL,[BP+ARMOR]       ; Subtract armor from attack                               
+028B  7205              00388         JC .4
+028D  53                00389         PUSH BX
+028E  E8BEFF            00390         CALL SUB_HP     ; Subtract from player's HP
+0291  5B                00391         POP BX
+0292                    00392 .4:
+0292                    00393     ;   mov ah,0x00     ; Comes here with ah = 0
+0292  CD16              00394         INT 0X16        ; Wait for a key.
+0294  EBE3              00395         JMP .2          ; Another battle round.
+0296                    00396 
+0296                    00397         ;
+0296                    00398         ; Monster is dead
+0296                    00399         ;
+0296                    00400 .3:
+0296  C605FA            00401         MOV BYTE [DI],GR_FLOOR  ; Remove from screen
+0299  C3                00402         RET
+029A                    00403 
+029A                    00404         ;
+029A                    00405         ; Fill a row on screen for a room
+029A                    00406         ;
+029A  51                00407 FILL:   PUSH CX                 ; Save CX because it needs CL value again
+029B  57                00408         PUSH DI                 ; Save video position
+029C  E81500            00409         CALL DOOR               ; Left border
+029F  88D8              00410 .1:     MOV AL,BL               ; Filler
+02A1  E81000            00411         CALL DOOR
+02A4  FEC9              00412         DEC CL
+02A6  79F7              00413         JNS .1
+02A8  88F8              00414         MOV AL,BH               ; Right border
+02AA  E80700            00415         CALL DOOR
+02AD  5F                00416         POP DI                  ; Restore video position
+02AE  59                00417         POP CX                  ; Restore CX                                        
+02AF  81C7A000          00418         ADD DI,0X00A0           ; Goes to next row on screen
+02B3  C3                00419         RET
+02B4                    00420 
+02B4                    00421         ;
+02B4                    00422         ; Draw a room character on screen
+02B4                    00423         ;
+02B4                    00424 DOOR:
+02B4  3CFA              00425         CMP AL,GR_FLOOR         ; Drawing floor?
+02B6  7521              00426         JNE .3                  ; No, jump
+02B8  53                00427         PUSH BX                 ; Here BH is equal to GR_VERT
+02B9  E83100            00428         CALL RANDOM             ; Get a random number
+02BC  3C06              00429         CMP AL,6                ; Chance of creating a monster
+02BE  730D              00430         JNC .11
+02C0  024603            00431         ADD AL,[BP+LEVEL]       ; More difficult monsters as level is deeper
+02C3                    00432 .9:
+02C3  2C05              00433         SUB AL,0X05             
+02C5  3C17              00434         CMP AL,0X17             ; Make sure it fits inside ASCII letters
+02C7  7DFA              00435         JGE .9
+02C9  0444              00436         ADD AL,0X44             ; Offset into ASCII letters
+02CB  EB0B              00437         JMP SHORT .12
+02CD                    00438 
+02CD                    00439 .11:
+02CD  BBFC02            00440         MOV BX,ITEMS-6          ; Table of items
+02D0  3C0B              00441         CMP AL,11               ; Chance of creating an item
+02D2  2ED7              00442         CS XLAT
+02D4  7202              00443         JB .12
+02D6  B0FA              00444         MOV AL,GR_FLOOR         ; Show only floor.
+02D8  5B                00445 .12:    POP BX
+02D9                    00446 .3:
+02D9  3CCD              00447         CMP AL,GR_HORIZ
+02DB  7404              00448         JE .1
+02DD  3CBA              00449         CMP AL,GR_VERT
+02DF  7507              00450         JNE .2
+02E1  803DB1            00451 .1:     CMP BYTE [DI],GR_TUNNEL
+02E4  7502              00452         JNE .2
+02E6  B0CE              00453         MOV AL,GR_DOOR
+02E8  AA                00454 .2:     STOSB
+02E9  47                00455         INC DI
+02EA  C3                00456         RET
+02EB                    00457 
+02EB                    00458 RANDOM6:
+02EB  B706              00459         MOV BH,0X06
+02ED                    00460 
+02ED                    00461 RANDOM:
+02ED  B8A11E            00462         MOV AX,7841
+02F0  F76606            00463         MUL WORD [BP+RND]
+02F3  055300            00464         ADD AX,83
+02F6  894606            00465         MOV [BP+RND],AX
+02F9                    00466  
+02F9                    00467 ;       rdtsc           ; Would make it dependent on Pentium II
+02F9                    00468 
+02F9                    00469 ;       in al,(0x40)    ; Only works for slow requirements.
+02F9                    00470 
+02F9  30E4              00471         XOR AH,AH
+02FB  F6F7              00472         DIV BH
+02FD  88E0              00473         MOV AL,AH
+02FF  98                00474         CBW
+0300  40                00475         INC AX
+0301  C3                00476         RET
+0302                    00477 
+0302                    00478         ;
+0302                    00479         ; Items
+0302                    00480         ;
+0302                    00481 ITEMS:
+0302  05                00482         DB GR_FOOD
+0303  0F                00483         DB GR_GOLD
+0304  04                00484         DB GR_TRAP
+0305  18                00485         DB GR_WEAPON
+0306  08                00486         DB GR_ARMOR
+0307                    00487 
+0307                    00488     %IFDEF COM_FILE
+0307                    00489     %ELSE
+0307                    00490         TIMES 510-($-$$) DB 0X4F
+0307                    00491         DB 0X55,0XAA            ; Make it a bootable sector
+0307                    00492     %ENDIF
+0307                    00493 
+
+00000 ERRORS FOUND
+00000 WARNINGS FOUND
+
+01038 PROGRAM BYTES
+
+LABEL                VALUE/ADDRESS
+
+ADD_HP               0251
+ADD_HP.1             025c
+ARMOR                0001
+ARMOR_FOUND          023f
+BATTLE               0271
+BATTLE.2             0279
+BATTLE.3             0296
+BATTLE.4             0292
+BOX_HEIGHT           0008
+BOX_MAX_HEIGHT       0006
+BOX_MAX_WIDTH        0017
+BOX_WIDTH            001a
+COM_FILE             0001
+DOOR                 02b4
+DOOR.1               02e1
+DOOR.11              02cd
+DOOR.12              02d8
+DOOR.2               02e8
+DOOR.3               02d9
+DOOR.9               02c3
+FILL                 029a
+FILL.1               029f
+FOOD_FOUND           0247
+GAME_LOOP            01c1
+GAME_LOOP.1          01c8
+GAME_LOOP.2          0203
+GAME_LOOP.3          0201
+GENERATE_DUNGEON     0117
+GENERATE_DUNGEON.0   0122
+GENERATE_DUNGEON.1   01be
+GENERATE_DUNGEON.2   01ac
+GENERATE_DUNGEON.3   014b
+GENERATE_DUNGEON.4   0151
+GENERATE_DUNGEON.5   0158
+GENERATE_DUNGEON.6   019b
+GENERATE_DUNGEON.7   0137
+GENERATE_DUNGEON.8   01b1
+GENERATE_DUNGEON.9   017c
+GR_ARMOR             0008
+GR_BOT_LEFT          00c8
+GR_BOT_RIGHT         00bc
+GR_DOOR              00ce
+GR_FLOOR             00fa
+GR_FOOD              0005
+GR_GOLD              000f
+GR_HERO              0001
+GR_HORIZ             00cd
+GR_LADDER            00f0
+GR_TOP_LEFT          00c9
+GR_TOP_RIGHT         00bb
+GR_TRAP              0004
+GR_TUNNEL            00b1
+GR_VERT              00ba
+GR_WEAPON            0018
+GR_YENDOR            000c
+HERO_COLOR           000e
+HP                   0004
+ITEMS                0302
+LADDER_FOUND         023c
+LEVEL                0003
+LIGHT_COLOR          0006
+MOVE_CANCEL          0239
+MOVE_OVER            0237
+QUIT                 023a
+RANDOM               02ed
+RANDOM6              02eb
+RND                  0006
+ROW_WIDTH            00a0
+START                0100
+SUB_HP               024f
+TRAP_FOUND           024c
+WEAPON               0000
+WEAPON_FOUND         0243
+YENDOR               0002
+YENDOR_LEVEL         001a
