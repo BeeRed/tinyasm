@@ -1,0 +1,367 @@
+                        00001 	;
+                        00002 	; Bricks game in one boot sector
+                        00003 	;
+                        00004 	; by Oscar Toledo G.
+                        00005 	;
+                        00006 	; Creation date: Nov/02/2019.
+                        00007 	;
+                        00008 
+                        00009 	CPU 8086
+                        00010 
+                        00011 	;
+                        00012 	; Press Left Shift to start the game
+                        00013 	; Press Left Ctrl to move the paddle to left
+                        00014 	; Press Left Alt to move the paddle to right
+                        00015 	;
+                        00016 
+                        00017     %IFDEF COM_FILE
+                        00018         ORG 0X0100
+                        00019     %ELSE
+7C00                    00020         ORG 0X7C00
+7C00                    00021     %ENDIF
+7C00                    00022 
+7C00                    00023 OLD_TIME:	EQU 16	; Old time 
+7C00                    00024 BALL_X:		EQU 14	; X-coordinate of ball (8.8 fraction)
+7C00                    00025 BALL_Y:		EQU 12	; Y-coordinate of ball (8.8 fraction)
+7C00                    00026 BALL_XS:	EQU 10	; X-speed of ball (8.8 fraction)
+7C00                    00027 BALL_YS:	EQU 8	; Y-speed of ball (8.8 fraction)
+7C00                    00028 BEEP:		EQU 6	; Frame count to turn off sound
+7C00                    00029 BRICKS:		EQU 4	; Remaining bricks
+7C00                    00030 BALLS:         EQU 2	; Remaining balls
+7C00                    00031 SCORE:         EQU 0	; Current score
+7C00                    00032 
+7C00                    00033 	;
+7C00                    00034 	; Start of the game
+7C00                    00035 	;
+7C00                    00036 START:
+7C00  B80200            00037 	MOV AX,0X0002		; Text mode 80x25x16 colors
+7C03  CD10              00038 	INT 0X10		; Setup
+7C05  B800B8            00039 	MOV AX,0XB800		; Address of video screen
+7C08  8ED8              00040 	MOV DS,AX		; Setup DS
+7C0A  8EC0              00041 	MOV ES,AX		; Setup ES
+7C0C  83EC20            00042 	SUB SP,32
+7C0F  31C0              00043 	XOR AX,AX
+7C11  50                00044 	PUSH AX			; Reset score
+7C12  B004              00045 	MOV AL,4		
+7C14  50                00046 	PUSH AX			; Balls remaining
+7C15  89E5              00047 	MOV BP,SP		; Setup stack frame for globals
+7C17                    00048 	;
+7C17                    00049 	; Start another level 
+7C17                    00050 	;
+7C17                    00051 ANOTHER_LEVEL:
+7C17  C746041101        00052 	MOV WORD [BP+BRICKS],273	; 273 bricks on screen
+7C1C  31FF              00053 	XOR DI,DI
+7C1E  B8B101            00054 	MOV AX,0X01B1		; Draw top border
+7C21  B95000            00055 	MOV CX,80
+7C24  FC                00056 	CLD
+7C25  F3AB              00057 	REP STOSW
+7C27  B118              00058 	MOV CL,24		; 24 rows
+7C29                    00059 .1:
+7C29  AB                00060 	STOSW			; Draw left border
+7C2A  B82000            00061 	MOV AX,0X20		; No bricks on this row
+7C2D  51                00062 	PUSH CX
+7C2E  80F917            00063 	CMP CL,23
+7C31  7309              00064 	JNB .2
+7C33  80E90F            00065 	SUB CL,15
+7C36  7604              00066 	JBE .2
+7C38  B0DB              00067 	MOV AL,0XDB		; Bricks on this row
+7C3A  88CC              00068 	MOV AH,CL
+7C3C                    00069 .2:
+7C3C  B127              00070 	MOV CL,39		; 39 bricks per row
+7C3E                    00071 .3:
+7C3E  AB                00072 	STOSW
+7C3F  AB                00073 	STOSW
+7C40  FEC4              00074 	INC AH			; Increase attribute color
+7C42  80FC08            00075 	CMP AH,0X08
+7C45  7502              00076 	JNE .4
+7C47  B401              00077 	MOV AH,0X01
+7C49                    00078 .4:
+7C49  E2F3              00079 	LOOP .3
+7C4B  59                00080 	POP CX
+7C4C                    00081 
+7C4C  B8B101            00082 	MOV AX,0X01B1		; Draw right border
+7C4F  AB                00083 	STOSW
+7C50  E2D7              00084 	LOOP .1
+7C52                    00085 
+7C52                    00086 	;
+7C52                    00087 	; Start another ball
+7C52                    00088 	;
+7C52  BF4A0F            00089 	MOV DI,0X0F4A		; Position of paddle
+7C55                    00090 ANOTHER_BALL:
+7C55  C6460F28          00091 	MOV BYTE [BP+BALL_X+1],0X28	; Center X
+7C59  C6460D14          00092 	MOV BYTE [BP+BALL_Y+1],0X14	; Center Y
+7C5D  31C0              00093 	XOR AX,AX
+7C5F  89460A            00094 	MOV [BP+BALL_XS],AX	; Static on screen
+7C62  894608            00095 	MOV [BP+BALL_YS],AX
+7C65  C6460601          00096 	MOV BYTE [BP+BEEP],0X01
+7C69                    00097 
+7C69  BEFE0F            00098 	MOV SI,0X0FFE		; Don't erase ball yet
+7C6C                    00099 GAME_LOOP:
+7C6C  E80F01            00100 	CALL WAIT_FRAME		; Wait 1/18.2 secs.
+7C6F                    00101 
+7C6F  C7040000          00102 	MOV WORD [SI],0X0000	; Erase ball
+7C73                    00103 	
+7C73  E84401            00104 	CALL UPDATE_SCORE	; Update score
+7C76                    00105 	
+7C76  B402              00106 	MOV AH,0X02		; Read modifier keys
+7C78  CD16              00107 	INT 0X16
+7C7A  A804              00108 	TEST AL,0X04		; Left ctrl
+7C7C  7414              00109 	JE .1
+7C7E  C6450600          00110 	MOV BYTE [DI+6],0	; Erase right side of paddle
+7C82  C6450800          00111 	MOV BYTE [DI+8],0
+7C86  83EF04            00112 	SUB DI,BYTE 4		; Move paddle to left
+7C89  81FF020F          00113 	CMP DI,0X0F02		; Limit
+7C8D  7703              00114 	JA .1
+7C8F  BF020F            00115 	MOV DI,0X0F02
+7C92                    00116 .1:
+7C92  A808              00117 	TEST AL,0X08		; Left alt
+7C94  740D              00118 	JE .2
+7C96  31C0              00119 	XOR AX,AX		; Erase left side of paddle
+7C98  AB                00120 	STOSW
+7C99  AB                00121 	STOSW			; DI increased automatically
+7C9A  81FF940F          00122 	CMP DI,0X0F94		; Limit
+7C9E  7203              00123 	JB .2
+7CA0  BF940F            00124 	MOV DI,0X0F94	
+7CA3                    00125 .2:
+7CA3  A802              00126 	TEST AL,0X02		; Left shift
+7CA5  7412              00127 	JE .15
+7CA7  8B460A            00128 	MOV AX,[BP+BALL_XS]	; Ball moving?
+7CAA  034608            00129 	ADD AX,[BP+BALL_YS]
+7CAD  750A              00130 	JNE .15			; Yes, jump
+7CAF                    00131 				; Setup movement of ball
+7CAF  C7460A40FF        00132 	MOV WORD [BP+BALL_XS],0XFF40
+7CB4  C7460880FF        00133 	MOV WORD [BP+BALL_YS],0XFF80
+7CB9                    00134 .15:
+7CB9  B8DF0A            00135 	MOV AX,0X0ADF		; Paddle graphic and color
+7CBC  57                00136 	PUSH DI
+7CBD  AB                00137 	STOSW			; Draw paddle
+7CBE  AB                00138 	STOSW
+7CBF  AB                00139 	STOSW
+7CC0  AB                00140 	STOSW
+7CC1  AB                00141 	STOSW
+7CC2  5F                00142 	POP DI
+7CC3                    00143 
+7CC3  8B5E0E            00144 	MOV BX,[BP+BALL_X]		; Draw ball
+7CC6  8B460C            00145 	MOV AX,[BP+BALL_Y]
+7CC9  E8E100            00146 	CALL LOCATE_BALL	; Locate on screen
+7CCC  F6460C80          00147 	TEST BYTE [BP+BALL_Y],0X80	; Y-coordinate half fraction?
+7CD0  B460              00148 	MOV AH,0X60		; Interchange colors for smooth mov.
+7CD2  7402              00149 	JE .12
+7CD4  B406              00150 	MOV AH,0X06
+7CD6  B0DC              00151 .12:	MOV AL,0XDC		; Graphic
+7CD8  8907              00152 	MOV [BX],AX		; Draw
+7CDA  53                00153 	PUSH BX
+7CDB  5E                00154 	POP SI
+7CDC                    00155 
+7CDC                    00156 .14:
+7CDC  8B5E0E            00157 	MOV BX,[BP+BALL_X]		; Ball position
+7CDF  8B460C            00158 	MOV AX,[BP+BALL_Y]
+7CE2  035E0A            00159 	ADD BX,[BP+BALL_XS]	; Add movement speed
+7CE5  034608            00160 	ADD AX,[BP+BALL_YS]
+7CE8  50                00161 	PUSH AX
+7CE9  53                00162 	PUSH BX
+7CEA  E8C000            00163 	CALL LOCATE_BALL	; Locate on screen
+7CED  8A07              00164 	MOV AL,[BX]
+7CEF  3CB1              00165 	CMP AL,0XB1		; Touching borders
+7CF1  751D              00166 	JNE .3
+7CF3  B92F15            00167 	MOV CX,5423		; 1193180 / 220
+7CF6  E89D00            00168 	CALL SPEAKER		; Generate sound
+7CF9  5B                00169 	POP BX
+7CFA  58                00170 	POP AX
+7CFB  80FF4F            00171 	CMP BH,0X4F
+7CFE  7404              00172 	JE .8
+7D00  84FF              00173 	TEST BH,BH
+7D02  7503              00174 	JNE .7
+7D04                    00175 .8:
+7D04  F75E0A            00176 	NEG WORD [BP+BALL_XS]	; Negate X-speed if touches sides
+7D07                    00177 .7:	
+7D07  84E4              00178 	TEST AH,AH
+7D09  7503              00179 	JNZ .9
+7D0B  F75E08            00180 	NEG WORD [BP+BALL_YS]	; Negate Y-speed if touches sides
+7D0E  EBCC              00181 .9:	JMP .14
+7D10                    00182 
+7D10                    00183 .3:
+7D10  3CDF              00184 	CMP AL,0XDF		; Touching paddle
+7D12  751B              00185 	JNE .4
+7D14  29FB              00186 	SUB BX,DI		; Subtract paddle position
+7D16  83EB04            00187 	SUB BX,BYTE 4
+7D19  B106              00188 	MOV CL,6		; Multiply by 64
+7D1B  D3E3              00189 	SHL BX,CL
+7D1D  895E0A            00190 	MOV [BP+BALL_XS],BX	; New X speed for ball
+7D20  C7460880FF        00191 	MOV WORD [BP+BALL_YS],0XFF80	; Update Y speed for ball
+7D25  B9970A            00192 	MOV CX,2711		; 1193180 / 440
+7D28  E86B00            00193 	CALL SPEAKER		; Generate sound
+7D2B  5B                00194 	POP BX
+7D2C  58                00195 	POP AX
+7D2D  EBAD              00196 	JMP .14
+7D2F                    00197 
+7D2F                    00198 .4:
+7D2F  3CDB              00199 	CMP AL,0XDB		; Touching brick
+7D31  7524              00200 	JNE .5
+7D33  B94B05            00201 	MOV CX,1355		; 1193180 / 880
+7D36  E85D00            00202 	CALL SPEAKER		; Generate sound
+7D39  F6C302            00203 	TEST BL,2		; Aligned with brick?
+7D3C  7502              00204 	JNE .10			; Yes, jump
+7D3E  4B                00205 	DEC BX			; Align
+7D3F  4B                00206 	DEC BX
+7D40  31C0              00207 .10:	XOR AX,AX		; Erase brick
+7D42  8907              00208 	MOV [BX],AX
+7D44  894702            00209 	MOV [BX+2],AX
+7D47  FF4600            00210 	INC WORD [BP+SCORE]	; Increase score
+7D4A  F75E08            00211 	NEG WORD [BP+BALL_YS]	; Negate Y speed (rebound)
+7D4D  5B                00212 	POP BX
+7D4E  58                00213 	POP AX
+7D4F  FF4E04            00214 	DEC WORD [BP+BRICKS]	; One brick less on screen
+7D52  7588              00215 	JNE .14			; Fully completed? No, jump.
+7D54  E9C0FE            00216 	JMP ANOTHER_LEVEL	; Start another level
+7D57                    00217 
+7D57                    00218 .5:
+7D57  5B                00219 	POP BX
+7D58  58                00220 	POP AX
+7D59                    00221 .6:
+7D59  895E0E            00222 	MOV [BP+BALL_X],BX		; Update ball position
+7D5C  89460C            00223 	MOV [BP+BALL_Y],AX
+7D5F  80FC19            00224 	CMP AH,0X19		; Ball exited through bottom?
+7D62  7403              00225 	JE BALL_LOST		; Yes, jump
+7D64  E905FF            00226 	JMP GAME_LOOP		; No, repeat game loop
+7D67                    00227 
+7D67                    00228 	;
+7D67                    00229 	; Ball lost
+7D67                    00230 	; 
+7D67                    00231 BALL_LOST:
+7D67  B95E2A            00232 	MOV CX,10846		; 1193180 / 110
+7D6A  E82900            00233 	CALL SPEAKER		; Generate sound
+7D6D                    00234 
+7D6D  C7040000          00235 	MOV WORD [SI],0		; Erase ball
+7D71  FE4E02            00236 	DEC BYTE [BP+BALLS]	; One ball less
+7D74  7803              00237 	JS .1			; All finished? Yes, jump
+7D76  E9DCFE            00238 	JMP ANOTHER_BALL	; Start another ball
+7D79                    00239 
+7D79  E81300            00240 .1:	CALL WAIT_FRAME.2	; Turn off sound
+7D7C  CD20              00241 	INT 0X20		; Exit to DOS / bootOS
+7D7E                    00242 
+7D7E                    00243 WAIT_FRAME:
+7D7E                    00244 .0:
+7D7E  B400              00245 	MOV AH,0X00		; Read ticks
+7D80  CD1A              00246 	INT 0X1A		; Call BIOS
+7D82  3B5610            00247 	CMP DX,[BP+OLD_TIME]	; Wait for change
+7D85  74F7              00248 	JE .0
+7D87  895610            00249 	MOV [BP+OLD_TIME],DX
+7D8A                    00250 
+7D8A  FE4E06            00251 	DEC BYTE [BP+BEEP]		; Decrease time to turn off beep
+7D8D  7506              00252 	JNE .1
+7D8F                    00253 .2:
+7D8F  E461              00254 	IN AL,0X61
+7D91  24FC              00255 	AND AL,0XFC		; Turn off
+7D93  E661              00256 	OUT 0X61,AL
+7D95                    00257 .1:
+7D95                    00258 
+7D95  C3                00259 	RET
+7D96                    00260 
+7D96                    00261 	;
+7D96                    00262 	; Generate sound on PC speaker
+7D96                    00263 	;
+7D96                    00264 SPEAKER:
+7D96  B0B6              00265 	MOV AL,0XB6		; Setup timer 2
+7D98  E643              00266 	OUT 0X43,AL
+7D9A  88C8              00267 	MOV AL,CL		; Low byte of timer count
+7D9C  E642              00268 	OUT 0X42,AL
+7D9E  88E8              00269 	MOV AL,CH		; High byte of timer count
+7DA0  E642              00270 	OUT 0X42,AL
+7DA2  E461              00271 	IN AL,0X61
+7DA4  0C03              00272 	OR AL,0X03		; Connect PC speaker to timer 2
+7DA6  E661              00273 	OUT 0X61,AL
+7DA8  C6460603          00274 	MOV BYTE [BP+BEEP],3	; Duration
+7DAC  C3                00275 	RET
+7DAD                    00276 
+7DAD                    00277 	;
+7DAD                    00278 	; Locate ball on screen
+7DAD                    00279 	;
+7DAD                    00280 LOCATE_BALL:
+7DAD  B0A0              00281 	MOV AL,0XA0
+7DAF  F6E4              00282 	MUL AH			; AH = Y coordinate (row)
+7DB1  88FB              00283 	MOV BL,BH		; BH = X coordinate (column)
+7DB3  B700              00284 	MOV BH,0
+7DB5  D1E3              00285 	SHL BX,1
+7DB7  01C3              00286 	ADD BX,AX
+7DB9  C3                00287 	RET
+7DBA                    00288 
+7DBA                    00289 	;
+7DBA                    00290 	; Update score indicator (from bootRogue)
+7DBA                    00291 	;
+7DBA                    00292 UPDATE_SCORE:
+7DBA  BB980F            00293 	MOV BX,0X0F98		; Point to bottom right corner
+7DBD  8B4600            00294 	MOV AX,[BP+SCORE]
+7DC0  E80300            00295 	CALL .1
+7DC3  8A4602            00296 	MOV AL,[BP+BALLS]
+7DC6                    00297 .1:
+7DC6  31C9              00298 	XOR CX,CX              ; CX = Quotient
+7DC8  41                00299 .2:	INC CX
+7DC9  2D0A00            00300 	SUB AX,10              ; Division by subtraction
+7DCC  73FA              00301 	JNC .2
+7DCE  053A0A            00302 	ADD AX,0X0A3A          ; Convert remainder to ASCII digit + color
+7DD1  E80400            00303 	CALL .3                ; Put on screen
+7DD4  91                00304 	XCHG AX,CX
+7DD5  48                00305 	DEC AX                 ; Quotient is zero?
+7DD6  75EE              00306 	JNZ .1                 ; No, jump to show more digits.
+7DD8                    00307 
+7DD8  8907              00308 .3:	MOV [BX],AX
+7DDA  4B                00309 	DEC BX
+7DDB  4B                00310 	DEC BX
+7DDC  C3                00311 	RET
+7DDD                    00312 
+7DDD                    00313     %IFDEF COM_FILE
+7DDD                    00314     %ELSE
+7DDD  4F4F4F4F4F4F4F4F  00315 	TIMES 510-($-$$) DB 0X4F
+7DFE  55AA              00316 	DB 0X55,0XAA           ; Make it a bootable sector
+7E00                    00317     %ENDIF
+
+00000 ERRORS FOUND
+00000 WARNINGS FOUND
+
+00512 PROGRAM BYTES
+
+LABEL                VALUE/ADDRESS
+
+ANOTHER_BALL         7c55
+ANOTHER_LEVEL        7c17
+ANOTHER_LEVEL.1      7c29
+ANOTHER_LEVEL.2      7c3c
+ANOTHER_LEVEL.3      7c3e
+ANOTHER_LEVEL.4      7c49
+BALLS                0002
+BALL_LOST            7d67
+BALL_LOST.1          7d79
+BALL_X               000e
+BALL_XS              000a
+BALL_Y               000c
+BALL_YS              0008
+BEEP                 0006
+BRICKS               0004
+GAME_LOOP            7c6c
+GAME_LOOP.1          7c92
+GAME_LOOP.10         7d40
+GAME_LOOP.12         7cd6
+GAME_LOOP.14         7cdc
+GAME_LOOP.15         7cb9
+GAME_LOOP.2          7ca3
+GAME_LOOP.3          7d10
+GAME_LOOP.4          7d2f
+GAME_LOOP.5          7d57
+GAME_LOOP.6          7d59
+GAME_LOOP.7          7d07
+GAME_LOOP.8          7d04
+GAME_LOOP.9          7d0e
+LOCATE_BALL          7dad
+OLD_TIME             0010
+SCORE                0000
+SPEAKER              7d96
+START                7c00
+UPDATE_SCORE         7dba
+UPDATE_SCORE.1       7dc6
+UPDATE_SCORE.2       7dc8
+UPDATE_SCORE.3       7dd8
+WAIT_FRAME           7d7e
+WAIT_FRAME.0         7d7e
+WAIT_FRAME.1         7d95
+WAIT_FRAME.2         7d8f
